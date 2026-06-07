@@ -1,0 +1,2 @@
+# No external dependencies required (uses stdlib only)
+# For DingTalk signature support (hmac, hashlib, base64), all stdlib

@@ -1,0 +1,21 @@
+{
+  "_comment": "===== 配置模板 - 复制为 config.json 并填入真实值 =====",
+
+  "api_key": "your_zhipu_api_key_here",
+  "endpoint": "intl",
+
+  "dingtalk": {
+    "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN",
+    "secret": ""
+  },
+
+  "email": {
+    "smtp_host": "smtp.qq.com",
+    "smtp_port": 587,
+    "smtp_user": "your_email@qq.com",
+    "smtp_pass": "your_smtp_authorization_code",
+    "from": "your_email@qq.com",
+    "to": ["receiver@example.com"],
+    "use_tls": true
+  }
+}

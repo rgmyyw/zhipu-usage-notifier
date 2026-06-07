@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  zhipu-usage-notifier:
+    build: .
+    container_name: zhipu-usage
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - INTERVAL_HOURS=1
+      - CONFIG_PATH=/app/config.json
+    volumes:
+      - ./config.json:/app/config.json:ro
