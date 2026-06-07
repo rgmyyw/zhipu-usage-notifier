@@ -230,7 +230,7 @@ def _overall_status(limits: list) -> str:
 def build_dingtalk(data: dict, api_key: str) -> str:
     level, limits = _parse_limits(data)
     masked = api_key[:6] + "****" + api_key[-4:] if len(api_key) > 10 else "****"
-    now = datetime.now(timezone.utc) + timedelta(hours=8)
+    now = datetime.now(timezone(timedelta(hours=8)))
 
     blocks = [b for b in [_limit_detail_block(l) for l in limits] if b["visible"]]
     status = _overall_status(limits)
@@ -292,7 +292,7 @@ def build_dingtalk(data: dict, api_key: str) -> str:
 def build_email_html(data: dict, api_key: str) -> str:
     level, limits = _parse_limits(data)
     masked = api_key[:6] + "****" + api_key[-4:] if len(api_key) > 10 else "****"
-    now = datetime.now(timezone.utc) + timedelta(hours=8)
+    now = datetime.now(timezone(timedelta(hours=8)))
     blocks = [b for b in [_limit_detail_block(l) for l in limits] if b["visible"]]
     email_status = _overall_status(limits)
 
@@ -392,7 +392,7 @@ def build_email_html(data: dict, api_key: str) -> str:
 def build_console(data: dict, api_key: str) -> str:
     level, limits = _parse_limits(data)
     masked = api_key[:6] + "****" + api_key[-4:] if len(api_key) > 10 else "****"
-    now = datetime.now(timezone.utc) + timedelta(hours=8)
+    now = datetime.now(timezone(timedelta(hours=8)))
 
     def row(label, val):
         return f"  {label:<14} {val}"
@@ -563,7 +563,7 @@ def main():
 
 
 def next_push_time() -> float:
-    now = datetime.now(timezone.utc) + timedelta(hours=8)
+    now = datetime.now(timezone(timedelta(hours=8)))
     minute = now.minute
     if minute < 30:
         next_minute = 30
