@@ -748,10 +748,52 @@ def _det_uuid(tag: str) -> str:
     return str(uuid.UUID(bytes=bytes(b)))
 
 
+AUTO_FAIL_LIMIT = 3          # auto 连续失败次数达到后进入冷却并告警
+AUTO_FAIL_COOLDOWN = 3600    # 冷却秒数:期内不再尝试 auto,避免无效请求刷屏
+
+
+def _notify_auto_fail(card_type: str, err: str, expire_at: Optional[int]):
+    """auto 使用连续失败告警(钉钉+邮件),提示手动处理"""
+    config = load_config()
+    meta = RESET_CARD_META[card_type]
+    tz8 = timezone(timedelta(hours=8))
+    when = datetime.fromtimestamp(expire_at / 1000, tz=tz8).strftime("%m/%d %H:%M") if expire_at else "-"
+    text = (f"⚠️ ZCode 重置卡自动使用连续 {AUTO_FAIL_LIMIT} 次失败\n"
+            f"类型:{meta['label']} · 卡片过期 {when}\n"
+            f"最近错误:{err[:200]}\n"
+            f"已进入 {AUTO_FAIL_COOLDOWN // 60} 分钟冷却。请到 ZCode 客户端手动使用,或检查接口状态。")
+    dingtalk_cfg = config.get("dingtalk")
+    if dingtalk_cfg and dingtalk_cfg.get("webhook_url"):
+        send_dingtalk(dingtalk_cfg["webhook_url"], text, dingtalk_cfg.get("secret"))
+    email_cfg = config.get("email")
+    if email_cfg and email_cfg.get("smtp_host") and email_cfg.get("to"):
+        try:
+            send_email(
+                smtp_host=email_cfg["smtp_host"],
+                smtp_port=email_cfg.get("smtp_port", 587),
+                smtp_user=email_cfg["smtp_user"],
+                smtp_pass=email_cfg["smtp_pass"],
+                from_addr=email_cfg.get("from", email_cfg["smtp_user"]),
+                to_addrs=email_cfg["to"] if isinstance(email_cfg["to"], list) else [email_cfg["to"]],
+                msg_html=f"<pre style=\"font-family:sans-serif\">{text}</pre>",
+                use_tls=email_cfg.get("use_tls", True),
+            )
+        except Exception as e:
+            log.error("Auto-fail email failed: %s", e)
+
+
 def use_reset_card(card_type: str, source: str, expire_at: Optional[int] = None) -> dict:
     """使用一张重置卡。auto 来源用确定性 UUID 幂等键(重试/多实例不重复消耗),manual 每次独立。"""
     if card_type not in RESET_CARD_META:
         return {"ok": False, "error": f"未知卡片类型 {card_type}"}
+    notify = False
+    with _reset_lock:
+        state = _load_reset_state()
+        if source == "auto":
+            cd = state.get("auto_cooldown", {}).get(card_type, 0)
+            if cd and cd > time.time():
+                log.info("Reset card auto-use in cooldown for %s", card_type)
+                return {"ok": False, "error": "auto 冷却中"}
     if source == "auto":
         idem = _det_uuid(f"{card_type}:{expire_at}")
     else:
@@ -763,12 +805,27 @@ def use_reset_card(card_type: str, source: str, expire_at: Optional[int] = None)
     with _reset_lock:
         state = _load_reset_state()
         _record_event(state, card_type, source, expire_at or 0, ok, r.get("error", ""))
-        if ok and source == "auto" and expire_at:
-            state.setdefault("batches", {})[card_type] = expire_at
+        if source == "auto":
+            fail = state.setdefault("auto_fail", {}).setdefault(card_type, {"count": 0})
+            if ok:
+                fail["count"] = 0
+                fail.pop("notified", None)
+                state.setdefault("batches", {})[card_type] = expire_at
+            else:
+                fail["count"] = int(fail.get("count", 0)) + 1
+                if fail["count"] >= AUTO_FAIL_LIMIT:
+                    state.setdefault("auto_cooldown", {})[card_type] = time.time() + AUTO_FAIL_COOLDOWN
+                    if not fail.get("notified"):
+                        fail["notified"] = True
+                        notify = True
+        elif ok:
+            state.setdefault("auto_fail", {}).setdefault(card_type, {"count": 0})["count"] = 0
         _save_reset_state(state)
 
     if ok and _reset_cfg().get("notify_on_use", True):
         threading.Thread(target=_notify_card_used, args=(card_type, source, expire_at), daemon=True).start()
+    if notify:
+        threading.Thread(target=_notify_auto_fail, args=(card_type, r.get("error", ""), expire_at), daemon=True).start()
     log.info("Reset card use [%s/%s]: %s", card_type, source, "ok" if ok else r.get("error"))
     return {"ok": ok, "error": r.get("error", "")}
 
