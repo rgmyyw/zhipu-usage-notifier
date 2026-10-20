@@ -1105,76 +1105,186 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>智谱 AI 用量仪表盘</title>
+<title>智谱 AI 用量</title>
 <style>
-:root{--bg:#0b1220;--card:#141d31;--line:#2a3a55;--txt:#e6edf7;--muted:#8fa3bf;
---green:#22c55e;--amber:#f59e0b;--red:#ef4444;--accent:#38bdf8}
+:root{
+--bg:#0d1424;--panel:#141c30;--panel2:#0f1626;--line:#263452;--line2:#1b2742;
+--txt:#e8eef9;--muted:#93a5c4;--faint:#647aa0;
+--green:#34d399;--amber:#fbbf24;--red:#f87171;--accent:#4cc2ff;--violet:#b79bff;
+}
 *{box-sizing:border-box}
-body{margin:0;padding:16px;background:radial-gradient(1200px 600px at 80% -10%,#16233d,var(--bg));color:var(--txt);
-font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-.wrap{max-width:1100px;margin:0 auto}
-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
-h1{font-size:19px;margin:0}
-.pill{padding:2px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding:20px 16px 40px;background:var(--bg);color:var(--txt);
+font:14px/1.65 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.wrap{max-width:1060px;margin:0 auto}
+a{color:var(--muted)}
+
+/* ── 顶栏 ── */
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:16px}
+h1{font-size:18px;font-weight:650;margin:0;letter-spacing:.2px}
+.pill{padding:3px 11px;border-radius:999px;font-size:12px;font-weight:600;
+background:var(--panel);border:1px solid var(--line);color:var(--muted)}
+.pill.ok{color:var(--green);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}
+.pill.warn{color:var(--amber);border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.08)}
+.pill.bad{color:var(--red);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08)}
 .muted{color:var(--muted);font-size:12px}
-button{background:var(--accent);color:#06283d;border:0;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer}
+button{background:var(--accent);color:#04263d;border:0;border-radius:8px;padding:7px 14px;
+font-size:13px;font-weight:600;cursor:pointer;transition:filter .15s}
+button:hover{filter:brightness(1.12)}
 button:active{transform:translateY(1px)}
-button.ghost{background:var(--card);color:var(--txt);border:1px solid var(--line)}
-select{background:#0c1526;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
-#banner{display:none;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.45);color:#fca5a5;
-border-radius:10px;padding:8px 14px;margin-bottom:12px;font-size:13px;animation:blink 2s infinite}
-@keyframes blink{50%{border-color:rgba(239,68,68,.2)}}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
-.card h2{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.top{display:flex;gap:14px;align-items:center}
-.ring{position:relative;width:74px;height:74px;flex:none}
-.ring svg{transform:rotate(-90deg)}
-.ring .v{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
-.big{font-size:24px;font-weight:700;margin-left:auto;text-align:right}
-.big small{display:block;font-size:11px;color:var(--muted);font-weight:400}
-.bar{position:relative;height:12px;border-radius:7px;background:#0a1120;overflow:hidden;margin:10px 0 2px}
-.bar>i{display:block;height:100%;border-radius:7px;transition:width .5s}
-.bar>i.crit{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 8px,transparent 8px 16px);animation:slide 1.2s linear infinite}
-@keyframes slide{to{background-position:32px 0}}
-.mark{position:absolute;top:-3px;width:1px;height:18px;background:#5b7194}
-.kv{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin:3px 0}
-.kv b{color:var(--txt);font-weight:600}
-.sub{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;font-size:12px;color:var(--muted)}
-.mrow{display:grid;grid-template-columns:minmax(70px,120px) 1fr 64px;gap:8px;align-items:center;margin:4px 0}
-.mrow span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mbar{height:6px;border-radius:4px;background:#0a1120;overflow:hidden}
-.mbar>i{display:block;height:100%}
-.spark{width:100%;height:36px;display:block;margin-top:8px}
-.eta{margin-top:8px;padding:6px 10px;border-radius:8px;font-size:12.5px;background:#0a1120;border:1px solid var(--line)}
-.tbar{height:5px;border-radius:3px;background:#0a1120;overflow:hidden;margin:4px 0 2px}
-.tbar>i{display:block;height:100%;background:#64748b}
-.rst{display:grid;grid-template-columns:minmax(96px,150px) 1fr 130px;gap:10px;align-items:center;margin:8px 0;font-size:12.5px}
-.rst .cd{font-weight:700;color:var(--txt)}
-svg text{fill:var(--muted);font-size:10px}
-.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted);margin-top:6px}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
-.setbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+button.ghost{background:var(--panel);color:var(--txt);border:1px solid var(--line);font-weight:500}
+button.mini{padding:4px 10px;font-size:12px;border-radius:7px}
+select{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;
+padding:6px 10px;font-size:13px}
+
+/* ── 告警横幅 ── */
+#banner{display:none;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);
+color:#fda4a4;border-radius:10px;padding:9px 14px;margin-bottom:14px;font-size:13px}
+
+/* ── 卡片 ── */
+.card{background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+.card h2{font-size:13.5px;font-weight:650;margin:0 0 12px;color:var(--muted);letter-spacing:.3px;
+display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+
+/* ── 总览区:左大环 + 右额度行 ── */
+.hero{display:grid;grid-template-columns:250px 1fr;gap:14px;margin-bottom:14px}
+.hero-side{background:var(--panel);border:1px solid var(--line2);border-radius:14px;
+padding:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.bigring{position:relative;width:148px;height:148px}
+.bigring svg{transform:rotate(-90deg)}
+.bigring .v{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.bigring .v b{font-size:34px;font-weight:700;line-height:1.1}
+.bigring .v span{font-size:11px;color:var(--muted)}
+.hero-side .cap{font-size:12px;color:var(--muted);text-align:center}
+#hero-name{font-size:13px;color:var(--txt);font-weight:600}
+
+/* ── 额度行 ── */
+.lrows{display:flex;flex-direction:column}
+.lrow{display:grid;grid-template-columns:minmax(120px,220px) 1fr 64px 150px 20px;
+gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line2);cursor:pointer;
+border-radius:8px;transition:background .12s}
+.lrow:hover{background:rgba(76,194,255,.05)}
+.lrow:last-child{border-bottom:0}
+.lname{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;min-width:0}
+.lname .ic{font-size:15px;flex:none}
+.lname .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lname .pd{font-size:11px;font-weight:500;color:var(--faint);flex:none}
+.lbar{position:relative;height:9px;border-radius:5px;background:var(--panel2);overflow:hidden}
+.lbar>i{display:block;height:100%;border-radius:5px;transition:width .5s}
+.lbar .mk{position:absolute;top:-2px;width:1px;height:13px;background:#3d5178;opacity:.8}
+.lpct{font-size:15px;font-weight:700;text-align:right}
+.lmeta{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-size:11.5px;color:var(--muted);text-align:right}
+.lmeta .rm{color:var(--txt);font-weight:600}
+.chev{color:var(--faint);font-size:11px;transition:transform .18s;text-align:center}
+.lrow.open .chev{transform:rotate(90deg)}
+
+/* ── 展开详情 ── */
+.ldet{display:none;padding:6px 6px 14px;border-bottom:1px solid var(--line2)}
+.lrow.open+.ldet{display:block}
+.ldet .kvgrid{display:flex;flex-wrap:wrap;gap:6px 26px;font-size:12.5px;color:var(--muted);margin-bottom:8px}
+.ldet .kvgrid b{color:var(--txt);font-weight:600;margin-left:6px}
+.eta{margin:6px 0;padding:7px 11px;border-radius:8px;font-size:12.5px;background:var(--panel2);border:1px solid var(--line2);color:var(--muted)}
+.eta.risk{background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.4);color:#fda4a4}
+.spark{width:100%;height:38px;display:block}
+.mrow{display:grid;grid-template-columns:minmax(80px,150px) 1fr 64px;gap:10px;align-items:center;margin:4px 0;font-size:12px}
+.mrow span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.mbar{height:5px;border-radius:3px;background:var(--panel2);overflow:hidden}
+.mbar>i{display:block;height:100%;border-radius:3px}
+.mrow .mv{text-align:right;color:var(--muted)}
+
+/* ── 重置卡 ── */
+.rc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rc-stat{background:var(--panel2);border:1px solid var(--line2);border-radius:11px;padding:13px 15px}
+.rc-stat .t{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.rc-stat .n{font-size:30px;font-weight:700;line-height:1.25}
+.rc-stat .n small{font-size:12px;font-weight:400;color:var(--muted);margin-left:4px}
+.rc-stat .e{font-size:12px;color:var(--muted);margin-top:2px}
+.rc-stat .e b{color:var(--txt);font-weight:600}
+.tag-wait{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;
+color:var(--amber);background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35)}
+.tag-near{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;
+color:var(--red);background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.35)}
+.rst{display:grid;grid-template-columns:minmax(90px,140px) 1fr 150px;gap:10px;align-items:center;margin:7px 0;font-size:12.5px}
+.tbar{height:5px;border-radius:3px;background:var(--panel2);overflow:hidden}
+.tbar>i{display:block;height:100%;border-radius:3px;background:#647aa0}
+.rst .cd{font-weight:600;color:var(--txt)}
+details.ev summary{cursor:pointer;font-size:12.5px;color:var(--muted);user-select:none}
+details.ev summary:hover{color:var(--txt)}
+
+/* ── 趋势图 ── */
+#chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+svg text{fill:var(--faint);font-size:10.5px}
+
+/* ── 设置 ── */
+.setbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
 #msg{font-size:12px;color:var(--muted)}
-footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
-@media(max-width:560px){.big{font-size:19px}.rst{grid-template-columns:1fr 90px}}
+
+footer{text-align:center;color:var(--faint);font-size:11.5px;margin-top:22px}
+
+@media(max-width:720px){
+body{padding:14px 10px 32px}
+.hero{grid-template-columns:1fr}
+.hero-side{flex-direction:row;justify-content:flex-start;gap:16px;padding:14px}
+.bigring{width:104px;height:104px;flex:none}
+.bigring .v b{font-size:24px}
+.lrow{grid-template-columns:minmax(96px,1fr) 58px 18px;grid-template-areas:"nm pct chev" "bar bar bar" "meta meta meta";
+row-gap:5px;padding:11px 2px}
+.lname{grid-area:nm}.lbar{grid-area:bar}.lpct{grid-area:pct}.lmeta{grid-area:meta;flex-direction:row;justify-content:space-between}
+.chev{grid-area:chev}
+.rc-grid{grid-template-columns:1fr 1fr}
+.rst{grid-template-columns:1fr 110px}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
+
 <header>
-  <h1>📊 智谱 AI 用量仪表盘</h1>
+  <h1>智谱 AI 用量</h1>
   <span class="pill" id="status">加载中…</span>
   <span class="muted" id="updated"></span>
   <span style="flex:1"></span>
-  <button class="ghost" onclick="loadUsage()">刷新</button>
+  <button class="ghost mini" onclick="refreshAll()">刷新</button>
 </header>
 
 <div id="banner"></div>
 
-<div class="card" style="margin-bottom:12px">
+<div class="hero">
+  <div class="hero-side">
+    <div class="bigring" id="hero-ring"></div>
+    <div class="cap" id="hero-name">加载中…</div>
+    <div class="cap">最高占用额度 · 其余见右</div>
+  </div>
+  <div class="card" style="margin:0">
+    <h2>额度总览 <span class="muted" style="font-weight:400">点击行展开明细</span></h2>
+    <div class="lrows" id="blocks"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>🎴 ZCode 重置卡
+    <span class="pill" id="rc-mode">加载中…</span>
+    <span style="flex:1"></span>
+    <button class="ghost mini" onclick="useCard('FIVE_HOUR',this)">用 5 小时卡</button>
+    <button class="ghost mini" onclick="useCard('WEEK',this)">用周卡</button>
+  </h2>
+  <div class="rc-grid" id="rc-stats"></div>
+  <div id="rc-body" style="margin-top:10px"></div>
+  <details class="ev" id="rc-events-wrap" style="margin-top:8px"><summary>最近触发记录</summary><div id="rc-events"></div></details>
+</div>
+
+<div class="card">
+  <h2>📈 近 24 小时用量趋势(已用 %)</h2>
+  <div id="chart" class="muted">暂无历史数据(每 10 分钟采样一条,积累中…)</div>
+  <div class="legend" id="legend"></div>
+</div>
+
+<div class="card">
+  <h2>⚙️ 推送设置</h2>
   <div class="setbar">
-    <b>🔔 推送频率</b>
     <select id="interval">
       <option value="0">关闭推送</option>
       <option value="30">每 30 分钟</option>
@@ -1189,138 +1299,150 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
     <button class="ghost" onclick="copyReport(this)">复制文本报告</button>
     <span id="msg"></span>
   </div>
-  <div class="muted">推送窗口 08:00–23:00,按所选频率对齐;调整后 30 秒内生效 · 数据直连智谱官方接口(本地无累计,数值为准接口侧口径)</div>
+  <div class="muted" style="margin-top:8px">推送窗口 08:00–23:00,按所选频率网格对齐;调整后 30 秒内生效 · 数据直连智谱官方接口</div>
 </div>
 
-<div class="card" style="margin-bottom:12px">
-  <h2>🎴 ZCode 重置卡 <span class="pill" id="rc-mode">加载中…</span>
-    <span style="flex:1"></span>
-    <button class="ghost" onclick="useCard('FIVE_HOUR',this)">使用一张5小时卡</button>
-    <button class="ghost" onclick="useCard('WEEK',this)">使用一张周卡</button>
-  </h2>
-  <div id="rc-body" class="muted">加载中…</div>
-  <div class="sub" id="rc-events"></div>
-</div>
-
-<div class="grid" id="blocks"></div>
-
-<div class="card" style="margin-top:12px">
-  <h2>⏰ 重置时刻表</h2>
-  <div class="muted" id="resets">加载中…</div>
-</div>
-
-<div class="card" style="margin-top:12px">
-  <h2>📈 近 24 小时用量趋势(已用 %)</h2>
-  <div id="chart" class="muted">暂无历史数据(采样每 10 分钟一条,积累中…)</div>
-  <div class="legend" id="legend"></div>
-</div>
-
-<footer>zhipu-usage dashboard · <a style="color:var(--muted)" href="/api/usage">/api/usage</a> · 历史 /api/history · 重置卡 /api/reset-cards</footer>
+<footer>zhipu-usage · <a href="/api/usage">/api/usage</a> · <a href="/api/history">/api/history</a> · <a href="/api/reset-cards">/api/reset-cards</a></footer>
 </div>
 
 <script>
-const COLORS=['#38bdf8','#a78bfa','#34d399','#fbbf24','#f472b6','#94a3b8'];
-const pctColor=p=>p>=80?'#ef4444':p>=50?'#f59e0b':'#22c55e';
+const COLORS=['#4cc2ff','#b79bff','#3ddba5','#fbd24c','#f87bd0','#8ea3c9'];
+const pctColor=p=>p>=80?'#f87171':p>=50?'#fbbf24':'#34d399';
 const fmtTok=v=>v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(1)+'K':String(v);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtNum=(v,u)=>u==='tokens'?fmtTok(v):String(v);
-function dur(sec){if(sec==null||!isFinite(sec))return'-';if(sec<=0)return'已重置';const d=Math.floor(sec/86400),h=Math.floor(sec%86400/3600),m=Math.floor(sec%3600/60);
+function dur(sec){if(sec==null||!isFinite(sec))return'-';if(sec<=0)return'已重置';
+const d=Math.floor(sec/86400),h=Math.floor(sec%86400/3600),m=Math.floor(sec%3600/60);
 return(d?d+'天':'')+(d||h?h+'小时':'')+m+'分'}
-function ring(id,p,color,size){const r=(size||64)/2-6,C=2*Math.PI*r;
-return `<div class="ring" style="width:${size||64}px;height:${size||64}px"><svg viewBox="0 0 ${size||64} ${size||64}">
-<circle cx="${(size||64)/2}" cy="${(size||64)/2}" r="${r}" fill="none" stroke="#0a1120" stroke-width="7"/>
-<circle cx="${(size||64)/2}" cy="${(size||64)/2}" r="${r}" fill="none" stroke="${color}" stroke-width="7"
-stroke-linecap="round" stroke-dasharray="${(Math.min(p,100)/100*C).toFixed(1)} ${C.toFixed(1)}"/></svg>
-<div class="v" id="${id}">${Math.round(p)}%</div></div>`}
-function spark(series,color){if(!series||series.length<2)return'';
-const W=280,H=36,P=3,pts=series.map((p,i)=>(P+i/(series.length-1)*(W-2*P)).toFixed(1)+','+(H-P-(Math.min(p,100)/100)*(H-2*P)).toFixed(1)).join(' ');
-return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`}
-function etaText(tag,now){
-  if(!now.has_total)return null; // 接口未给绝对值时无法测速
-  const seg=currentSegment(tag);if(!seg)return null;
+let HISTORY=[],USAGE=null;
+function currentSegment(tag){
+  const s=HISTORY.filter(x=>x.blocks&&x.blocks[tag]&&x.blocks[tag].used!=null).sort((a,b)=>a.ts-b.ts);
+  for(let i=s.length-1;i>0;i--)if(s[i].blocks[tag].used<s[i-1].blocks[tag].used)s=s.slice(i);
+  return s.length>1?s:null;
+}
+function etaText(b){
+  if(!b.has_total)return null;
+  const seg=currentSegment(b.tag);if(!seg)return null;
   const first=seg[0],last=seg[seg.length-1],dt=last.ts-first.ts;
   if(dt<1200||last.total<=0)return null;
   const rate=(last.used-first.used)/dt;
   if(rate<=0)return{ok:true,text:'消耗速率≈0,本周期内无耗尽风险'};
-  const eta=last.remaining/rate,resetIn=now.reset_at?now.reset_at-Date.now()/1000:null;
+  const eta=last.remaining/rate,resetIn=b.reset_at?b.reset_at-Date.now()/1000:null;
   const t='按近 '+Math.round(dt/60)+' 分钟速率,约 <b>'+dur(eta)+'</b> 后耗尽';
-  if(resetIn!=null&&eta<resetIn)return{ok:false,text:t+' —— <b>重置前会耗尽</b>,注意控制 ⚠️'};
+  if(resetIn!=null&&eta<resetIn)return{ok:false,text:t+' —— <b>重置前会耗尽</b> ⚠️'};
   return{ok:true,text:t+',可撑到重置 ✅'};
 }
-let HISTORY=[],USAGE=null;
-function currentSegment(tag){
-  const s=HISTORY.filter(x=>x.blocks&&x.blocks[tag]&&x.blocks[tag].used!=null).sort((a,b)=>a.ts-b.ts);
-  for(let i=s.length-1;i>0;i--)if(s[i].blocks[tag].used<s[i-1].blocks[tag].used)s=s.slice(i); // 截到最近一次重置之后
-  return s.length>1?s:null;
+function bigRing(p,color){
+  const S=148,cx=S/2,r=62,C=2*Math.PI*r;
+  return `<svg viewBox="0 0 ${S} ${S}" width="${S}" height="${S}">
+  <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="#0b1220" stroke-width="11"/>
+  <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${color}" stroke-width="11" stroke-linecap="round"
+  stroke-dasharray="${(Math.min(p,100)/100*C).toFixed(1)} ${C.toFixed(1)}"/></svg>
+  <div class="v"><b style="color:${color}">${Math.round(p)}<small style="font-size:16px">%</small></b><span>已用</span></div>`;
 }
-
+function spark(series,color){
+  if(!series||series.length<2)return'';
+  const W=560,H=38,P=3;
+  const pts=series.map((p,i)=>(P+i/(series.length-1)*(W-2*P)).toFixed(1)+','+(H-P-(Math.min(p,100)/100)*(H-2*P)).toFixed(1)).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`;
+}
+function toggleRow(i){
+  const row=document.getElementById('row-'+i);
+  row.classList.toggle('open');
+}
+function renderBlocks(j){
+  const maxB=j.blocks.reduce((a,b)=>b.pct>a.pct?b:a,j.blocks[0]);
+  const c=pctColor(j.max_pct);
+  document.getElementById('hero-ring').innerHTML=bigRing(j.max_pct,c);
+  document.getElementById('hero-name').innerHTML=maxB?`${esc(maxB.icon)} ${esc(maxB.label)}${maxB.period?' · '+esc(maxB.period):''} 为当前最高`:'';
+  document.getElementById('blocks').innerHTML=j.blocks.map((b,i)=>{
+    const col=pctColor(b.pct);
+    const remain=b.has_remaining?fmtNum(b.remaining,b.unit):null;
+    return `<div class="lrow" id="row-${i}" onclick="toggleRow(${i})">
+      <div class="lname"><span class="ic">${esc(b.icon)}</span><span class="nm" title="${esc(b.label)}">${esc(b.label)}</span><span class="pd">${esc(b.period||'')}</span></div>
+      <div class="lbar"><i style="width:${Math.min(b.pct,100).toFixed(1)}%;background:${col}"></i>
+        <span class="mk" style="left:50%"></span><span class="mk" style="left:80%"></span></div>
+      <div class="lpct num" style="color:${col}">${b.pct}%</div>
+      <div class="lmeta"><span class="rm num">${remain!=null?'剩 '+remain:'无剩余数据'}</span>
+        <span><span class="cd num" data-at="${b.reset_at||0}">-</span> 后重置</span></div>
+      <div class="chev">▶</div>
+    </div>
+    <div class="ldet" id="det-${i}">${renderDetail(b,i)}</div>`;
+  }).join('');
+}
+function renderDetail(b,i){
+  const col=COLORS[i%COLORS.length];
+  let h='<div class="kvgrid">';
+  if(b.has_total)h+=`<span>已消耗<b class="num">${fmtNum(b.used,b.unit)}</b></span><span>限额<b class="num">${fmtNum(b.total,b.unit)}</b></span>`;
+  h+=`<span>重置时刻<b>${b.reset_at?new Date(b.reset_at*1000).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'无'}</b></span>`;
+  if(b.window_hours&&b.reset_at){
+    const frac=Math.min(1,Math.max(0,1-(b.reset_at-Date.now()/1000)/(b.window_hours*3600)));
+    h+=`<span>本周期已过<b class="num">${(frac*100).toFixed(0)}%</b></span>`;
+  }
+  h+='</div>';
+  const eta=etaText(b);
+  if(eta)h+=`<div class="eta${eta.ok?'':' risk'}">🔮 ${eta.text}</div>`;
+  const seg=currentSegment(b.tag);
+  if(seg)h+=`<div style="margin:6px 0 2px" class="muted" style="font-size:12px">近 24 小时走势</div>${spark(seg.map(x=>x.blocks[b.tag].pct),col)}`;
+  if(b.details&&b.details.length){
+    h+='<div style="margin-top:8px" class="muted" style="font-size:12px">分模型明细</div>'+b.details.map(d=>{
+      const p=b.total>0?Math.min(100,d.usage/b.total*100):0;
+      return `<div class="mrow"><span title="${esc(d.model)}">${esc(d.model)}</span>
+      <span class="mbar"><i style="width:${p.toFixed(1)}%;background:${col}"></i></span>
+      <span class="mv num">${fmtTok(d.usage)}</span></div>`;
+    }).join('');
+  }
+  return h;
+}
 async function loadUsage(){
   try{
     const r=await fetch('/api/usage');const j=await r.json();
     if(!r.ok){document.getElementById('status').textContent='获取失败';document.getElementById('updated').textContent=j.error||'';return}
     USAGE=j;
-    document.getElementById('status').textContent=j.status;
-    document.getElementById('updated').textContent='更新于 '+j.updated_at+(j.level?' · 套餐 '+esc(j.level):'');
+    const sp=document.getElementById('status');
+    sp.textContent=j.status;
+    sp.className='pill '+(j.max_pct>=80?'bad':j.max_pct>=50?'warn':'ok');
+    document.getElementById('updated').textContent='更新于 '+j.updated_at+(j.level?' · '+esc(j.level):'');
     document.getElementById('interval').value=String(j.interval_minutes);
     const warns=j.blocks.filter(b=>b.pct>=80);
     const banner=document.getElementById('banner');
     banner.style.display=warns.length?'block':'none';
     if(warns.length)banner.innerHTML='⚠️ '+warns.map(b=>esc(b.label)+(b.period?'('+esc(b.period)+')':'')+' 已用 '+b.pct+'%').join('、')+' —— 超 80% 告警线';
-    document.getElementById('blocks').innerHTML=j.blocks.map((b,i)=>{
-      const c=pctColor(b.pct),col=COLORS[i%COLORS.length];
-      const seg=currentSegment(b.tag),sparkData=seg?seg.map(x=>x.blocks[b.tag].pct):null;
-      const eta=etaText(b,b);
-      let h=`<div class="card"><h2>${esc(b.icon)} ${esc(b.label)}${b.period?` <span class="pill">${esc(b.period)}</span>`:''}</h2>
-      <div class="top">${ring('rg'+i,b.pct,c)}
-        <div class="big" style="color:${c}">${b.pct}%<small>已用${b.has_remaining?' · 剩余 '+fmtNum(b.remaining,b.unit)+(esc(b.unit)==='tokens'?' tokens':''):''}</small></div></div>
-      <div class="bar"><i class="${b.pct>=80?'crit':''}" style="width:${Math.min(b.pct,100)}%;background:${c}"></i>
-        <span class="mark" style="left:50%"></span><span class="mark" style="left:80%"></span></div>
-      ${b.has_total?`<div class="kv"><span>已消耗 <b>${fmtNum(b.used,b.unit)}</b></span><span>限额 <b>${fmtNum(b.total,b.unit)}</b></span></div>`:''}
-      <div class="kv"><span>重置</span><b><span class="cd" data-at="${b.reset_at||0}">-</span> · ${b.reset_at?new Date(b.reset_at*1000).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'无'}</span></b></div>`;
-      if(b.window_hours&&b.reset_at){
-        const frac=Math.min(1,Math.max(0,1-(b.reset_at-Date.now()/1000)/(b.window_hours*3600)));
-        h+=`<div class="kv"><span>本周期已过</span><b>${(frac*100).toFixed(0)}%</b></div><div class="tbar"><i style="width:${(frac*100).toFixed(0)}%"></i></div>`;
-      }
-      if(eta)h+=`<div class="eta" style="border-color:${eta.ok?'var(--line)':'rgba(239,68,68,.5)'}">🔮 ${eta.text}</div>`;
-      if(sparkData)h+=`<div class="sub">近 24 小时${spark(sparkData,col)}</div>`;
-      if(b.details&&b.details.length){
-        h+=`<div class="sub"><b>分模型明细</b>`+b.details.map(d=>{
-          const p=b.total>0?Math.min(100,d.usage/b.total*100):0;
-          return `<div class="mrow"><span title="${esc(d.model)}">${esc(d.model)}</span><span class="mbar"><i style="width:${p.toFixed(1)}%;background:${col}"></i></span><span style="text-align:right;color:var(--muted)">${fmtTok(d.usage)}</span></div>`;
-        }).join('')+`</div>`;
-      }
-      return h+`</div>`;
-    }).join('');
-    document.getElementById('resets').innerHTML=j.blocks.map(b=>
-      `<div class="rst"><span>${esc(b.icon)} ${esc(b.label)}${b.period?'<span class="muted">('+esc(b.period)+')</span>':''}</span>
-       <span class="tbar" style="margin:0"><i style="width:${(b.pct>=0?b.pct:0)}%;background:${pctColor(b.pct)}"></i></span>
-       <span class="cd" data-at="${b.reset_at||0}" style="text-align:right">-</span></div>`).join('')
-      +'<div class="muted" style="margin-top:4px">倒计时实时跳动;横条为当前用量占比</div>';
+    renderBlocks(j);
   }catch(e){document.getElementById('status').textContent='网络错误'}
 }
 async function loadHistory(){
   try{
     const r=await fetch('/api/history');const j=await r.json();
     HISTORY=(j.samples||[]).filter(x=>x.ts>Date.now()/1000-24*3600-1200);
-    if(USAGE)loadUsage();
+    if(USAGE)renderBlocks(USAGE);
     const s=HISTORY;if(s.length<2)return;
     const t0=s[0].ts,t1=Math.max(s[s.length-1].ts,t0+1);
     if(t1-t0<1800){document.getElementById('chart').textContent='采样积累中(每 10 分钟一条),跨度满 30 分钟后展示趋势…';return}
     const tags=[...new Set(s.flatMap(x=>Object.keys(x.blocks||{})))];
-    const W=1000,H=230,P=30;
+    const W=1000,H=240,P=34;
     const X=t=>P+(t-t0)/(t1-t0)*(W-2*P),Y=p=>H-P-(p/100)*(H-2*P);
     let g='';
-    [0,25,50,75,80,100].forEach(yy=>{g+=`<line x1="${P}" x2="${W-P}" y1="${Y(yy)}" y2="${Y(yy)}" stroke="${yy===80?'#7f1d1d':'#2a3a55'}" stroke-dasharray="${yy===0||yy===80?'0':'3 4'}"/>`+(yy===80?`<text x="${W-P+2}" y="${Y(yy)+3}" fill="#f87171">80%</text>`:`<text x="4" y="${Y(yy)+3}">${yy}%</text>`)});
+    [0,25,50,75,80,100].forEach(yy=>{
+      g+=`<line x1="${P}" x2="${W-P}" y1="${Y(yy)}" y2="${Y(yy)}" stroke="${yy===80?'#7a3b3b':'#1e2c49'}" stroke-dasharray="${yy===0||yy===80?'0':'3 5'}"/>`+
+      `<text x="${yy===80?W-P+2:4}" y="${Y(yy)+3.5}"${yy===80?' fill="#f87171"':''} text-anchor="${yy===80?'start':'start'}">${yy}%</text>`;
+    });
     for(let i=0;i<=3;i++){const t=t0+(t1-t0)*i/3,d=new Date(t*1000);
-      g+=`<text x="${X(t)}" y="${H-8}" text-anchor="middle">${String(d.getHours()).padStart(2,'0')}:00</text>`}
+      g+=`<text x="${X(t)}" y="${H-8}" text-anchor="middle">${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}</text>`}
     let paths='',legend='';
     tags.forEach((tag,ti)=>{
       const col=COLORS[ti%COLORS.length];
-      const pts=s.filter(x=>x.blocks[tag]).map(x=>X(x.ts).toFixed(1)+','+Y(x.blocks[tag].pct).toFixed(1)).join(' ');
-      if(pts)paths+=`<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>`;
+      const ptsArr=s.filter(x=>x.blocks[tag]);
+      const pts=ptsArr.map(x=>X(x.ts).toFixed(1)+','+Y(x.blocks[tag].pct).toFixed(1)).join(' ');
+      if(pts){
+        const last=ptsArr[ptsArr.length-1];
+        paths+=`<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>`+
+        `<circle cx="${X(last.ts).toFixed(1)}" cy="${Y(last.blocks[tag].pct).toFixed(1)}" r="3.2" fill="${col}"/>`+
+        `<text x="${Math.min(X(last.ts)+6,W-42).toFixed(1)}" y="${(Y(last.blocks[tag].pct)-6).toFixed(1)}" fill="${col}" style="font-weight:600">${last.blocks[tag].pct}%</text>`;
+      }
       legend+=`<span><i style="background:${col}"></i>${esc(tag)}</span>`;
     });
-    document.getElementById('chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${g}${paths}</svg>`;
+    document.getElementById('chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}">${g}${paths}</svg>`;
     document.getElementById('legend').innerHTML=legend;
   }catch(e){}
 }
@@ -1356,35 +1478,52 @@ async function copyReport(btn){
     await copyText(j.text);msg.textContent='✅ 文本报告已复制到剪贴板';
   }catch(e){msg.textContent='❌ 复制失败'}
 }
-function tickCd(){const now=Date.now()/1000;
-document.querySelectorAll('.cd').forEach(el=>{const at=parseFloat(el.dataset.at);
-el.textContent=at>0?dur(at-now):(at===0?'无':'-')})}
+function tickCd(){
+  const now=Date.now()/1000;
+  document.querySelectorAll('.cd').forEach(el=>{
+    const at=parseFloat(el.dataset.at);
+    el.textContent=at>0?dur(at-now):(at===0?'无':'-');
+  });
+}
 async function loadResetCards(){
-  const body=document.getElementById('rc-body'),mode=document.getElementById('rc-mode');
+  const stats=document.getElementById('rc-stats'),body=document.getElementById('rc-body'),mode=document.getElementById('rc-mode');
   try{
     const r=await fetch('/api/reset-cards');const j=await r.json();
-    if(!j.enabled){mode.textContent='未启用';body.innerHTML='<span class="muted">config.json 中 reset_card.enabled=false</span>';return}
-    if(j.error){mode.textContent='异常';body.innerHTML='<span style="color:#fca5a5">⚠️ '+esc(j.error)+'</span>';}
-    else{
-      mode.textContent=j.auto_use?('自动使用已开启 · 临期'+j.threshold_minutes+'分钟触发'):'仅展示(自动使用关闭)';
-      const row=(list,label)=>{
-        if(!list.length)return `<div class="rst"><span>${label}</span><span></span><span class="muted" style="text-align:right">无卡片</span></div>`;
-        const groups={};list.forEach(c=>{const k=c.expire_at;groups[k]=groups[k]||{n:0,c};groups[k].n++});
-        return Object.values(groups).map(g=>{
-          const c=g.c,n=g.n>1?' ×'+g.n:'';
-          const flag=c.will_auto_use?' <span style="color:#fbbf24">⏰待自动使用</span>':(c.near_expiry?' <span style="color:#fca5a5">临期</span>':'');
-          return `<div class="rst"><span>${label}${n}</span>
-          <span class="tbar" style="margin:0"><i style="width:${Math.max(3,Math.min(100,c.expire_in/86400)).toFixed(0)}%;background:${c.near_expiry?'#ef4444':'#38bdf8'}"></i></span>
-          <span style="text-align:right"><span class="cd" data-at="${(c.expire_at/1000).toFixed(0)}">-</span> 后过期${flag}</span></div>`}).join('');
-      };
-      body.innerHTML=row(j.five_hour,'🔁 5 小时卡')+row(j.week,'📅 周卡')
-        +'<div class="muted" style="margin-top:4px">距过期不足 '+j.threshold_minutes+' 分钟时自动使用一张(同批次仅一张)'+(j.notify_on_use?' · 触发后推送钉钉/邮箱':' · 触发不发通知')+'</div>';
-    }
-    const ev=document.getElementById('rc-events');
-    ev.innerHTML=(j.events&&j.events.length)?'<b>最近触发</b>'+j.events.slice(0,8).map(e=>{
+    if(!j.enabled){mode.textContent='未启用';mode.className='pill';
+      stats.innerHTML='';body.innerHTML='<span class="muted">config.json 中 reset_card.enabled=false</span>';return}
+    if(j.error){mode.textContent='异常';mode.className='pill bad';
+      stats.innerHTML='';body.innerHTML='<span style="color:var(--red)">⚠️ '+esc(j.error)+'</span>';return}
+    mode.textContent=j.auto_use?('自动使用 · 临期 '+j.threshold_minutes+' 分钟触发'):'仅展示(自动使用关闭)';
+    mode.className='pill '+(j.auto_use?'ok':'');
+    const statCard=(list,title)=>{
+      const n=list.length;
+      const first=list.length?list.slice().sort((a,b)=>a.expire_at-b.expire_at)[0]:null;
+      const flags=first?(first.will_auto_use?'<span class="tag-wait">⏰ 待自动使用</span>':(first.near_expiry?'<span class="tag-near">临期</span>':'')):'';
+      return `<div class="rc-stat"><div class="t">${title}</div>
+      <div class="n num">${n}<small>张</small></div>
+      <div class="e">${first?('最早 <b><span class="cd" data-at="${(first.expire_at/1000).toFixed(0)}">-</span></b> 后过期'+flags):'暂无卡片'}</div></div>`;
+    };
+    stats.innerHTML=statCard(j.five_hour,'🔁 5 小时卡')+statCard(j.week,'📅 周卡');
+    const row=(list,label)=>{
+      if(!list.length)return '';
+      const groups={};list.forEach(c=>{const k=c.expire_at;groups[k]=groups[k]||{n:0,c};groups[k].n++});
+      return Object.values(groups).map(g=>{
+        const c=g.c,n=g.n>1?' ×'+g.n:'';
+        const flag=c.will_auto_use?' <span style="color:var(--amber)">⏰待自动使用</span>':(c.near_expiry?' <span style="color:var(--red)">临期</span>':'');
+        return `<div class="rst"><span>${label}${n}</span>
+        <span class="tbar"><i style="width:${Math.max(3,Math.min(100,c.expire_in/86400)).toFixed(0)}%;background:${c.near_expiry?'#f87171':'#4cc2ff'}"></i></span>
+        <span style="text-align:right"><span class="cd" data-at="${(c.expire_at/1000).toFixed(0)}">-</span> 后过期${flag}</span></div>`}).join('');
+    };
+    const rowsHtml=row(j.five_hour,'🔁 5 小时卡')+row(j.week,'📅 周卡');
+    body.innerHTML=rowsHtml+((j.five_hour.length+j.week.length)?
+      `<div class="muted" style="margin-top:4px">距过期不足 ${j.threshold_minutes} 分钟时自动使用一张(同批次仅一张)${j.notify_on_use?' · 触发后推送钉钉/邮箱':''}</div>`:'');
+    const wrap=document.getElementById('rc-events-wrap');
+    const evs=(j.events||[]);
+    wrap.style.display=evs.length?'':'none';
+    document.getElementById('rc-events').innerHTML=evs.slice(0,8).map(e=>{
       const t=new Date(e.ts*1000).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
       const nm=e.type==='WEEK'?'周卡':'5小时卡';
-      return `<div class="kv"><span>${t} · ${e.source==='auto'?'自动':'手动'}使用${nm}${e.result==='failed'?' ❌ '+esc(e.detail||'失败'):' ✅'}</span><span></span></div>`}).join(''):'';
+      return `<div class="muted" style="margin:3px 0">${t} · ${e.source==='auto'?'自动':'手动'}使用${nm}${e.result==='failed'?' ❌ '+esc(e.detail||'失败'):' ✅'}</div>`}).join('');
   }catch(e){body.textContent='网络错误'}
 }
 async function useCard(type,btn){
@@ -1398,12 +1537,14 @@ async function useCard(type,btn){
   }catch(e){alert('使用失败: 网络错误')}
   btn.disabled=false;btn.textContent=old;loadResetCards();
 }
+function refreshAll(){loadUsage();loadHistory();loadResetCards()}
 tickCd();setInterval(tickCd,1000);
-loadUsage();loadHistory();loadResetCards();
+refreshAll();
 setInterval(loadUsage,60000);setInterval(loadHistory,300000);setInterval(loadResetCards,60000);
 </script>
 </body>
-</html>"""
+</html>
+"""
 
 
 class _Handler(BaseHTTPRequestHandler):
