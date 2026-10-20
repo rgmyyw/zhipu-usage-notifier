@@ -1107,110 +1107,147 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>智谱 AI 用量</title>
 <style>
+/* ===== 设计令牌: 浅色默认, 深色覆盖(对齐 MSR 看板 8300) ===== */
 :root{
---bg:#0d1424;--panel:#141c30;--panel2:#0f1626;--line:#263452;--line2:#1b2742;
---txt:#e8eef9;--muted:#93a5c4;--faint:#647aa0;
---green:#34d399;--amber:#fbbf24;--red:#f87171;--accent:#4cc2ff;--violet:#b79bff;
+--bg:#eef1f6;--bg-soft:#e6eaf1;--card:#ffffff;--card-hi:#f6f9fc;
+--border:#dfe5ee;--border-hi:#c8d3e2;
+--text:#1a2433;--muted:#5f6f85;--faint:#93a1b5;
+--acc:#0f7adb;--acc-strong:#0a63b3;--acc-dim:rgba(15,122,219,.10);--acc-glow:rgba(15,122,219,.22);
+--ok:#0e9f6e;--ok-dim:rgba(14,159,110,.12);
+--err:#dc2626;--err-dim:rgba(220,38,38,.10);
+--warn:#c2780a;--warn-dim:rgba(194,130,10,.12);
+--bar-track:#e8edf4;
+--shadow:0 1px 2px rgba(23,33,46,.06),0 2px 8px rgba(23,33,46,.04);
+--shadow-pop:0 12px 40px rgba(23,33,46,.18);
+--topbar-bg:rgba(255,255,255,.82);
+}
+html[data-theme=dark]{
+--bg:#0a0e14;--bg-soft:#0d1219;--card:#121926;--card-hi:#17202f;
+--border:#1f2a3a;--border-hi:#2d3c52;
+--text:#e7edf5;--muted:#8a9ab0;--faint:#5b6b81;
+--acc:#52a8ff;--acc-strong:#7cc1ff;--acc-dim:rgba(82,168,255,.13);--acc-glow:rgba(82,168,255,.30);
+--ok:#3ecf8e;--ok-dim:rgba(62,207,142,.13);
+--err:#ff6b6b;--err-dim:rgba(255,107,107,.12);
+--warn:#f0b429;--warn-dim:rgba(240,180,41,.13);
+--bar-track:#1c2736;
+--shadow:0 1px 2px rgba(0,0,0,.35),0 2px 10px rgba(0,0,0,.22);
+--shadow-pop:0 18px 60px rgba(0,0,0,.55);
+--topbar-bg:rgba(10,14,20,.78);
 }
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;padding:20px 16px 40px;background:var(--bg);color:var(--txt);
-font:14px/1.65 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
-.wrap{max-width:1060px;margin:0 auto}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+background:radial-gradient(900px 420px at 82% -12%,var(--acc-dim),transparent 62%),
+radial-gradient(700px 380px at -8% 108%,var(--ok-dim),transparent 60%)}
+::selection{background:var(--acc-glow)}
+.wrap{max-width:1240px;margin:0 auto;padding:16px 18px 56px}
+.num{font-variant-numeric:tabular-nums}
 a{color:var(--muted)}
 
 /* ── 顶栏 ── */
-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:16px}
-h1{font-size:18px;font-weight:650;margin:0;letter-spacing:.2px}
-.pill{padding:3px 11px;border-radius:999px;font-size:12px;font-weight:600;
-background:var(--panel);border:1px solid var(--line);color:var(--muted)}
-.pill.ok{color:var(--green);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}
-.pill.warn{color:var(--amber);border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.08)}
-.pill.bad{color:var(--red);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08)}
+.topbar{position:sticky;top:0;z-index:40;background:var(--topbar-bg);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.topbar-in{max-width:1240px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand .mark{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;
+background:linear-gradient(135deg,#2f7ce0,#1b4f9c);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),var(--shadow)}
+.brand h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.2px}
+.brand .sub{font-size:11px;color:var(--muted);margin-top:1px}
+.pill{font-size:12px;padding:4px 11px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--muted);
+white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.pill.on{color:var(--ok);border-color:var(--ok-dim);background:var(--ok-dim)}.pill.on .dot{background:var(--ok)}
+.pill.warn{color:var(--warn);border-color:var(--warn-dim);background:var(--warn-dim)}.pill.warn .dot{background:var(--warn)}
+.pill.err{color:var(--err);border-color:var(--err-dim);background:var(--err-dim)}.pill.err .dot{background:var(--err)}
 .muted{color:var(--muted);font-size:12px}
-button{background:var(--accent);color:#04263d;border:0;border-radius:8px;padding:7px 14px;
-font-size:13px;font-weight:600;cursor:pointer;transition:filter .15s}
-button:hover{filter:brightness(1.12)}
-button:active{transform:translateY(1px)}
-button.ghost{background:var(--panel);color:var(--txt);border:1px solid var(--line);font-weight:500}
-button.mini{padding:4px 10px;font-size:12px;border-radius:7px}
-select{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;
-padding:6px 10px;font-size:13px}
 
-/* ── 告警横幅 ── */
-#banner{display:none;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);
-color:#fda4a4;border-radius:10px;padding:9px 14px;margin-bottom:14px;font-size:13px}
+/* ── 按钮 ── */
+.btn{border:1px solid transparent;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;background:var(--acc);color:#fff;
+font-weight:600;transition:filter .15s,transform .06s,background .15s}
+.btn:hover{filter:brightness(1.08)}.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.btn.secondary{background:var(--card);color:var(--text);border-color:var(--border-hi);font-weight:500}
+.btn.secondary:hover{background:var(--card-hi)}
+.btn.small{padding:5px 11px;font-size:12px;border-radius:8px}
+.iconbtn{width:36px;height:36px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:16px}
 
-/* ── 卡片 ── */
-.card{background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:16px 18px;margin-bottom:14px}
-.card h2{font-size:13.5px;font-weight:650;margin:0 0 12px;color:var(--muted);letter-spacing:.3px;
-display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+/* ── 横幅 ── */
+.banner{padding:10px 14px;border-radius:12px;margin:0 0 14px;font-size:13px;display:none;
+border:1px solid var(--err-dim);background:var(--err-dim);color:var(--err)}
+.banner.show{display:block}
 
-/* ── 总览区:左大环 + 右额度行 ── */
-.hero{display:grid;grid-template-columns:250px 1fr;gap:14px;margin-bottom:14px}
-.hero-side{background:var(--panel);border:1px solid var(--line2);border-radius:14px;
-padding:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
-.bigring{position:relative;width:148px;height:148px}
-.bigring svg{transform:rotate(-90deg)}
-.bigring .v{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.bigring .v b{font-size:34px;font-weight:700;line-height:1.1}
-.bigring .v span{font-size:11px;color:var(--muted)}
-.hero-side .cap{font-size:12px;color:var(--muted);text-align:center}
-#hero-name{font-size:13px;color:var(--txt);font-weight:600}
+/* ── KPI 卡 ── */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+.kpi{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--border);border-radius:14px;
+padding:14px 16px;box-shadow:var(--shadow)}
+.kpi .lb{font-size:11px;color:var(--muted);letter-spacing:.8px;display:flex;align-items:center;gap:6px}
+.kpi .val{font-size:26px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:.3px}
+.kpi .val.ok{color:var(--ok)}.kpi .val.warn{color:var(--warn)}.kpi .val.err{color:var(--err)}
+.kpi .note{font-size:12px;color:var(--muted);margin-top:2px;min-height:18px}
 
-/* ── 额度行 ── */
-.lrows{display:flex;flex-direction:column}
-.lrow{display:grid;grid-template-columns:minmax(120px,220px) 1fr 64px 150px 20px;
-gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line2);cursor:pointer;
-border-radius:8px;transition:background .12s}
-.lrow:hover{background:rgba(76,194,255,.05)}
-.lrow:last-child{border-bottom:0}
-.lname{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;min-width:0}
-.lname .ic{font-size:15px;flex:none}
-.lname .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lname .pd{font-size:11px;font-weight:500;color:var(--faint);flex:none}
-.lbar{position:relative;height:9px;border-radius:5px;background:var(--panel2);overflow:hidden}
-.lbar>i{display:block;height:100%;border-radius:5px;transition:width .5s}
-.lbar .mk{position:absolute;top:-2px;width:1px;height:13px;background:#3d5178;opacity:.8}
-.lpct{font-size:15px;font-weight:700;text-align:right}
-.lmeta{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-size:11.5px;color:var(--muted);text-align:right}
-.lmeta .rm{color:var(--txt);font-weight:600}
+/* ── 通用卡片 ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card h2{font-size:13px;font-weight:700;margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--text)}
+
+/* ── 额度卡片网格 ── */
+.accgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-bottom:12px}
+.acc{position:relative;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px 14px;
+box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px;transition:border-color .15s,transform .12s;cursor:pointer}
+.acc:hover{border-color:var(--border-hi);transform:translateY(-1px)}
+.acc-top{display:flex;align-items:flex-start;gap:9px}
+.acc-name{flex:1;min-width:0}
+.acc-title{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.acc-region{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
+.st{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);white-space:nowrap;margin-top:2px;font-weight:600}
+.st .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex-shrink:0}
+.st.ok{color:var(--ok)}.st.ok .dot{background:var(--ok)}
+.st.warn{color:var(--warn)}.st.warn .dot{background:var(--warn)}
+.st.err{color:var(--err)}.st.err .dot{background:var(--err)}
+.pct-big{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.pct-big small{font-size:12px;font-weight:400;color:var(--muted);margin-left:6px}
+.pbar{height:8px;border-radius:999px;background:var(--bar-track);overflow:hidden;position:relative}
+.pbar .fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--acc),var(--acc-strong));transition:width .8s ease}
+.pbar .fill.warn{background:linear-gradient(90deg,#d99414,#c2780a)}
+.pbar .fill.err{background:linear-gradient(90deg,#e44040,#dc2626)}
+.pbar .mk{position:absolute;top:-2px;width:1px;height:12px;background:var(--border-hi)}
+.acc-nums{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.numblk{background:var(--bg-soft);border-radius:10px;padding:8px 11px}
+.numblk .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+.numblk .k{font-size:11px;color:var(--muted);margin-top:1px}
+.acc-tasks{font-size:12px}
+.tk-line{display:flex;justify-content:space-between;color:var(--muted);margin-bottom:4px;gap:8px}
+.tk-line b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
 .chev{color:var(--faint);font-size:11px;transition:transform .18s;text-align:center}
-.lrow.open .chev{transform:rotate(90deg)}
-
-/* ── 展开详情 ── */
-.ldet{display:none;padding:6px 6px 14px;border-bottom:1px solid var(--line2)}
-.lrow.open+.ldet{display:block}
-.ldet .kvgrid{display:flex;flex-wrap:wrap;gap:6px 26px;font-size:12.5px;color:var(--muted);margin-bottom:8px}
-.ldet .kvgrid b{color:var(--txt);font-weight:600;margin-left:6px}
-.eta{margin:6px 0;padding:7px 11px;border-radius:8px;font-size:12.5px;background:var(--panel2);border:1px solid var(--line2);color:var(--muted)}
-.eta.risk{background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.4);color:#fda4a4}
+.acc.open .chev{transform:rotate(90deg)}
+.bdet{display:none;padding-top:6px;border-top:1px dashed var(--border)}
+.acc.open .bdet{display:block}
+.eta{margin:6px 0;padding:7px 11px;border-radius:9px;font-size:12.5px;background:var(--bg-soft);color:var(--muted)}
+.eta.risk{background:var(--err-dim);color:var(--err)}
 .spark{width:100%;height:38px;display:block}
-.mrow{display:grid;grid-template-columns:minmax(80px,150px) 1fr 64px;gap:10px;align-items:center;margin:4px 0;font-size:12px}
+.mrow{display:grid;grid-template-columns:minmax(80px,140px) 1fr 60px;gap:10px;align-items:center;margin:4px 0;font-size:12px}
 .mrow span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
-.mbar{height:5px;border-radius:3px;background:var(--panel2);overflow:hidden}
+.mbar{height:5px;border-radius:3px;background:var(--bar-track);overflow:hidden}
 .mbar>i{display:block;height:100%;border-radius:3px}
-.mrow .mv{text-align:right;color:var(--muted)}
+.mrow .mv{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
 
 /* ── 重置卡 ── */
-.rc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.rc-stat{background:var(--panel2);border:1px solid var(--line2);border-radius:11px;padding:13px 15px}
-.rc-stat .t{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
-.rc-stat .n{font-size:30px;font-weight:700;line-height:1.25}
+.rc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+.rc-stat{background:var(--bg-soft);border-radius:10px;padding:12px 14px}
+.rc-stat .t{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.rc-stat .n{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
 .rc-stat .n small{font-size:12px;font-weight:400;color:var(--muted);margin-left:4px}
 .rc-stat .e{font-size:12px;color:var(--muted);margin-top:2px}
-.rc-stat .e b{color:var(--txt);font-weight:600}
+.rc-stat .e b{color:var(--text);font-weight:600}
 .tag-wait{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;
-color:var(--amber);background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35)}
+color:var(--warn);background:var(--warn-dim)}
 .tag-near{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;
-color:var(--red);background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.35)}
+color:var(--err);background:var(--err-dim)}
 .rst{display:grid;grid-template-columns:minmax(90px,140px) 1fr 150px;gap:10px;align-items:center;margin:7px 0;font-size:12.5px}
-.tbar{height:5px;border-radius:3px;background:var(--panel2);overflow:hidden}
-.tbar>i{display:block;height:100%;border-radius:3px;background:#647aa0}
-.rst .cd{font-weight:600;color:var(--txt)}
+.tbar{height:5px;border-radius:3px;background:var(--bar-track);overflow:hidden}
+.tbar>i{display:block;height:100%;border-radius:3px;background:var(--acc)}
+.rst .cd{font-weight:600;color:var(--text)}
 details.ev summary{cursor:pointer;font-size:12.5px;color:var(--muted);user-select:none}
-details.ev summary:hover{color:var(--txt)}
+details.ev summary:hover{color:var(--text)}
 
 /* ── 趋势图 ── */
 #chart svg{width:100%;height:auto;display:block}
@@ -1219,60 +1256,60 @@ details.ev summary:hover{color:var(--txt)}
 svg text{fill:var(--faint);font-size:10.5px}
 
 /* ── 设置 ── */
+.iv-row{display:flex;gap:6px;flex-wrap:wrap}
+.iv-btn{border:1px solid var(--border-hi);background:var(--card);border-radius:8px;padding:5px 12px;font-size:12.5px;
+cursor:pointer;color:var(--muted);transition:all .12s}
+.iv-btn:hover{color:var(--text)}
+.iv-btn.active{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
 .setbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
 #msg{font-size:12px;color:var(--muted)}
 
 footer{text-align:center;color:var(--faint);font-size:11.5px;margin-top:22px}
 
 @media(max-width:720px){
-body{padding:14px 10px 32px}
-.hero{grid-template-columns:1fr}
-.hero-side{flex-direction:row;justify-content:flex-start;gap:16px;padding:14px}
-.bigring{width:104px;height:104px;flex:none}
-.bigring .v b{font-size:24px}
-.lrow{grid-template-columns:minmax(96px,1fr) 58px 18px;grid-template-areas:"nm pct chev" "bar bar bar" "meta meta meta";
-row-gap:5px;padding:11px 2px}
-.lname{grid-area:nm}.lbar{grid-area:bar}.lpct{grid-area:pct}.lmeta{grid-area:meta;flex-direction:row;justify-content:space-between}
-.chev{grid-area:chev}
+.kpis{grid-template-columns:repeat(2,1fr)}
+.accgrid{grid-template-columns:1fr}
 .rc-grid{grid-template-columns:1fr 1fr}
 .rst{grid-template-columns:1fr 110px}
+.rst>span:nth-child(2){display:none}
 }
 </style>
 </head>
 <body>
+
+<div class="topbar"><div class="topbar-in">
+  <div class="brand">
+    <div class="mark">📊</div>
+    <div><h1>智谱 AI 用量</h1><div class="sub">zhipu-usage-notifier</div></div>
+  </div>
+  <span class="pill" id="status"><span class="dot"></span><span id="status-t">加载中…</span></span>
+  <span class="muted" id="updated"></span>
+  <button class="btn secondary small" onclick="refreshAll()">刷新</button>
+  <button class="btn secondary iconbtn" id="theme-btn" onclick="toggleTheme()" title="切换主题">🌙</button>
+</div></div>
+
 <div class="wrap">
 
-<header>
-  <h1>智谱 AI 用量</h1>
-  <span class="pill" id="status">加载中…</span>
-  <span class="muted" id="updated"></span>
-  <span style="flex:1"></span>
-  <button class="ghost mini" onclick="refreshAll()">刷新</button>
-</header>
+<div class="banner" id="banner"></div>
 
-<div id="banner"></div>
-
-<div class="hero">
-  <div class="hero-side">
-    <div class="bigring" id="hero-ring"></div>
-    <div class="cap" id="hero-name">加载中…</div>
-    <div class="cap">最高占用额度 · 其余见右</div>
-  </div>
-  <div class="card" style="margin:0">
-    <h2>额度总览 <span class="muted" style="font-weight:400">点击行展开明细</span></h2>
-    <div class="lrows" id="blocks"></div>
-  </div>
+<div class="kpis">
+  <div class="kpi"><div class="lb">⚠️ 最高占用</div><div class="val" id="kpi-max">–</div><div class="note" id="kpi-max-note"></div></div>
+  <div class="kpi"><div class="lb">💧 最紧张剩余</div><div class="val" id="kpi-remain">–</div><div class="note" id="kpi-remain-note"></div></div>
+  <div class="kpi"><div class="lb">🔁 5 小时卡</div><div class="val" id="kpi-5h">–</div><div class="note" id="kpi-5h-note"></div></div>
+  <div class="kpi"><div class="lb">📅 周卡</div><div class="val" id="kpi-w">–</div><div class="note" id="kpi-w-note"></div></div>
 </div>
+
+<div class="accgrid" id="blocks"></div>
 
 <div class="card">
   <h2>🎴 ZCode 重置卡
-    <span class="pill" id="rc-mode">加载中…</span>
+    <span class="pill" id="rc-mode"><span class="dot"></span><span id="rc-mode-t">加载中…</span></span>
     <span style="flex:1"></span>
-    <button class="ghost mini" onclick="useCard('FIVE_HOUR',this)">用 5 小时卡</button>
-    <button class="ghost mini" onclick="useCard('WEEK',this)">用周卡</button>
+    <button class="btn secondary small" onclick="useCard('FIVE_HOUR',this)">用 5 小时卡</button>
+    <button class="btn secondary small" onclick="useCard('WEEK',this)">用周卡</button>
   </h2>
   <div class="rc-grid" id="rc-stats"></div>
-  <div id="rc-body" style="margin-top:10px"></div>
+  <div id="rc-body"></div>
   <details class="ev" id="rc-events-wrap" style="margin-top:8px"><summary>最近触发记录</summary><div id="rc-events"></div></details>
 </div>
 
@@ -1285,29 +1322,21 @@ row-gap:5px;padding:11px 2px}
 <div class="card">
   <h2>⚙️ 推送设置</h2>
   <div class="setbar">
-    <select id="interval">
-      <option value="0">关闭推送</option>
-      <option value="30">每 30 分钟</option>
-      <option value="60">每 1 小时</option>
-      <option value="120">每 2 小时</option>
-      <option value="180">每 3 小时</option>
-      <option value="360">每 6 小时</option>
-      <option value="720">每 12 小时</option>
-    </select>
-    <button onclick="saveInterval(this)">保存</button>
-    <button class="ghost" onclick="pushNow(this)">立即推送</button>
-    <button class="ghost" onclick="copyReport(this)">复制文本报告</button>
+    <div class="iv-row" id="iv-row"></div>
+    <button class="btn small" onclick="pushNow(this)">立即推送</button>
+    <button class="btn secondary small" onclick="copyReport(this)">复制文本报告</button>
     <span id="msg"></span>
   </div>
-  <div class="muted" style="margin-top:8px">推送窗口 08:00–23:00,按所选频率网格对齐;调整后 30 秒内生效 · 数据直连智谱官方接口</div>
+  <div class="muted" style="margin-top:8px">推送窗口 08:00–23:00,按所选频率网格对齐;点选即保存,30 秒内生效 · 数据直连智谱官方接口</div>
 </div>
 
 <footer>zhipu-usage · <a href="/api/usage">/api/usage</a> · <a href="/api/history">/api/history</a> · <a href="/api/reset-cards">/api/reset-cards</a></footer>
 </div>
 
 <script>
-const COLORS=['#4cc2ff','#b79bff','#3ddba5','#fbd24c','#f87bd0','#8ea3c9'];
-const pctColor=p=>p>=80?'#f87171':p>=50?'#fbbf24':'#34d399';
+const COLORS=['#2f7ce0','#0e9f6e','#c2780a','#8b5cf6','#db2777','#64748b'];
+const pctColor=p=>p>=80?'var(--err)':p>=50?'var(--warn)':'var(--ok)';
+const pctCls=p=>p>=80?'err':p>=50?'warn':'ok';
 const fmtTok=v=>v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(1)+'K':String(v);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtNum=(v,u)=>u==='tokens'?fmtTok(v):String(v);
@@ -1332,84 +1361,91 @@ function etaText(b){
   if(resetIn!=null&&eta<resetIn)return{ok:false,text:t+' —— <b>重置前会耗尽</b> ⚠️'};
   return{ok:true,text:t+',可撑到重置 ✅'};
 }
-function bigRing(p,color){
-  const S=148,cx=S/2,r=62,C=2*Math.PI*r;
-  return `<svg viewBox="0 0 ${S} ${S}" width="${S}" height="${S}">
-  <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="#0b1220" stroke-width="11"/>
-  <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${color}" stroke-width="11" stroke-linecap="round"
-  stroke-dasharray="${(Math.min(p,100)/100*C).toFixed(1)} ${C.toFixed(1)}"/></svg>
-  <div class="v"><b style="color:${color}">${Math.round(p)}<small style="font-size:16px">%</small></b><span>已用</span></div>`;
-}
 function spark(series,color){
   if(!series||series.length<2)return'';
   const W=560,H=38,P=3;
   const pts=series.map((p,i)=>(P+i/(series.length-1)*(W-2*P)).toFixed(1)+','+(H-P-(Math.min(p,100)/100)*(H-2*P)).toFixed(1)).join(' ');
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`;
 }
-function toggleRow(i){
-  const row=document.getElementById('row-'+i);
-  row.classList.toggle('open');
-}
+function toggleBlock(i){document.getElementById('blk-'+i).classList.toggle('open')}
 function renderBlocks(j){
-  const maxB=j.blocks.reduce((a,b)=>b.pct>a.pct?b:a,j.blocks[0]);
-  const c=pctColor(j.max_pct);
-  document.getElementById('hero-ring').innerHTML=bigRing(j.max_pct,c);
-  document.getElementById('hero-name').innerHTML=maxB?`${esc(maxB.icon)} ${esc(maxB.label)}${maxB.period?' · '+esc(maxB.period):''} 为当前最高`:'';
   document.getElementById('blocks').innerHTML=j.blocks.map((b,i)=>{
-    const col=pctColor(b.pct);
-    const remain=b.has_remaining?fmtNum(b.remaining,b.unit):null;
-    return `<div class="lrow" id="row-${i}" onclick="toggleRow(${i})">
-      <div class="lname"><span class="ic">${esc(b.icon)}</span><span class="nm" title="${esc(b.label)}">${esc(b.label)}</span><span class="pd">${esc(b.period||'')}</span></div>
-      <div class="lbar"><i style="width:${Math.min(b.pct,100).toFixed(1)}%;background:${col}"></i>
-        <span class="mk" style="left:50%"></span><span class="mk" style="left:80%"></span></div>
-      <div class="lpct num" style="color:${col}">${b.pct}%</div>
-      <div class="lmeta"><span class="rm num">${remain!=null?'剩 '+remain:'无剩余数据'}</span>
-        <span><span class="cd num" data-at="${b.reset_at||0}">-</span> 后重置</span></div>
-      <div class="chev">▶</div>
+    const col=COLORS[i%COLORS.length];
+    const remain=b.has_remaining?fmtNum(b.remaining,b.unit)+(esc(b.unit)==='tokens'?' tokens':''):null;
+    return `<div class="acc" id="blk-${i}" onclick="toggleBlock(${i})">
+    <div class="acc-top">
+      <div class="acc-name">
+        <div class="acc-title">${esc(b.icon)} ${esc(b.label)}</div>
+        <div class="acc-region">${esc(b.period||'')} · 已用百分比${b.has_total?'':'(接口未给绝对值)'}</div>
+      </div>
+      <span class="st ${pctCls(b.pct)}"><span class="dot"></span>${b.pct}%</span>
     </div>
-    <div class="ldet" id="det-${i}">${renderDetail(b,i)}</div>`;
+    <div class="pct-big" style="color:${pctColor(b.pct)}">${b.pct}%<small>已用${remain!=null?' · 剩 '+remain:''}</small></div>
+    <div class="pbar"><i class="fill ${pctCls(b.pct)}" style="width:${Math.min(b.pct,100).toFixed(1)}%"></i>
+      <span class="mk" style="left:50%"></span><span class="mk" style="left:80%"></span></div>
+    <div class="acc-nums">
+      <div class="numblk"><div class="v">${b.has_total?fmtNum(b.used,b.unit):'–'}</div><div class="k">已消耗${b.has_total?'':'(未知)'}</div></div>
+      <div class="numblk"><div class="v">${remain!=null?remain:'–'}</div><div class="k">剩余</div></div>
+    </div>
+    <div class="acc-tasks">
+      <div class="tk-line"><span>重置</span><b><span class="cd" data-at="${b.reset_at||0}">-</span> 后 · ${b.reset_at?new Date(b.reset_at*1000).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'无'}</b></div>
+      <div class="chev">▶ 展开明细</div>
+    </div>
+    <div class="bdet">${renderDetail(b,i)}</div>
+    </div>`;
   }).join('');
 }
 function renderDetail(b,i){
   const col=COLORS[i%COLORS.length];
-  let h='<div class="kvgrid">';
-  if(b.has_total)h+=`<span>已消耗<b class="num">${fmtNum(b.used,b.unit)}</b></span><span>限额<b class="num">${fmtNum(b.total,b.unit)}</b></span>`;
-  h+=`<span>重置时刻<b>${b.reset_at?new Date(b.reset_at*1000).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'无'}</b></span>`;
-  if(b.window_hours&&b.reset_at){
-    const frac=Math.min(1,Math.max(0,1-(b.reset_at-Date.now()/1000)/(b.window_hours*3600)));
-    h+=`<span>本周期已过<b class="num">${(frac*100).toFixed(0)}%</b></span>`;
-  }
-  h+='</div>';
+  let h='';
   const eta=etaText(b);
   if(eta)h+=`<div class="eta${eta.ok?'':' risk'}">🔮 ${eta.text}</div>`;
+  if(b.window_hours&&b.reset_at){
+    const frac=Math.min(1,Math.max(0,1-(b.reset_at-Date.now()/1000)/(b.window_hours*3600)));
+    h+=`<div class="tk-line"><span>本周期已过</span><b>${(frac*100).toFixed(0)}%</b></div>`;
+  }
   const seg=currentSegment(b.tag);
-  if(seg)h+=`<div style="margin:6px 0 2px" class="muted" style="font-size:12px">近 24 小时走势</div>${spark(seg.map(x=>x.blocks[b.tag].pct),col)}`;
+  if(seg)h+=`<div style="margin:4px 0 2px" class="muted">近 24 小时走势</div>${spark(seg.map(x=>x.blocks[b.tag].pct),col)}`;
   if(b.details&&b.details.length){
-    h+='<div style="margin-top:8px" class="muted" style="font-size:12px">分模型明细</div>'+b.details.map(d=>{
+    h+='<div style="margin-top:6px" class="muted">分模型明细</div>'+b.details.map(d=>{
       const p=b.total>0?Math.min(100,d.usage/b.total*100):0;
       return `<div class="mrow"><span title="${esc(d.model)}">${esc(d.model)}</span>
       <span class="mbar"><i style="width:${p.toFixed(1)}%;background:${col}"></i></span>
-      <span class="mv num">${fmtTok(d.usage)}</span></div>`;
+      <span class="mv">${fmtTok(d.usage)}</span></div>`;
     }).join('');
   }
-  return h;
+  return h||'<div class="muted">暂无更多明细</div>';
+}
+function renderInterval(iv){
+  const opts=[[0,'关'],[30,'30 分'],[60,'1 时'],[120,'2 时'],[180,'3 时'],[360,'6 时'],[720,'12 时']];
+  document.getElementById('iv-row').innerHTML=opts.map(([v,t])=>
+    `<button class="iv-btn${v===iv?' active':''}" onclick="pickInterval(${v},this)">${t}</button>`).join('');
 }
 async function loadUsage(){
   try{
     const r=await fetch('/api/usage');const j=await r.json();
-    if(!r.ok){document.getElementById('status').textContent='获取失败';document.getElementById('updated').textContent=j.error||'';return}
+    if(!r.ok){document.getElementById('status-t').textContent='获取失败';document.getElementById('updated').textContent=j.error||'';return}
     USAGE=j;
     const sp=document.getElementById('status');
-    sp.textContent=j.status;
-    sp.className='pill '+(j.max_pct>=80?'bad':j.max_pct>=50?'warn':'ok');
+    sp.className='pill '+(j.max_pct>=80?'err':j.max_pct>=50?'warn':'on');
+    document.getElementById('status-t').textContent=j.status;
     document.getElementById('updated').textContent='更新于 '+j.updated_at+(j.level?' · '+esc(j.level):'');
-    document.getElementById('interval').value=String(j.interval_minutes);
+    renderInterval(j.interval_minutes);
     const warns=j.blocks.filter(b=>b.pct>=80);
     const banner=document.getElementById('banner');
-    banner.style.display=warns.length?'block':'none';
+    banner.className='banner'+(warns.length?' show':'');
     if(warns.length)banner.innerHTML='⚠️ '+warns.map(b=>esc(b.label)+(b.period?'('+esc(b.period)+')':'')+' 已用 '+b.pct+'%').join('、')+' —— 超 80% 告警线';
+    const maxB=j.blocks.reduce((a,b)=>b.pct>a.pct?b:a,j.blocks[0]);
+    const km=document.getElementById('kpi-max');
+    km.textContent=j.max_pct+'%';km.className='val '+pctCls(j.max_pct);
+    document.getElementById('kpi-max-note').textContent=maxB?maxB.label+(maxB.period?' · '+maxB.period:''):'';
+    const kr=document.getElementById('kpi-remain');
+    if(maxB&&maxB.has_remaining){
+      kr.textContent=fmtNum(maxB.remaining,maxB.unit);
+      document.getElementById('kpi-remain-note').textContent=(maxB.label||'')+' 剩余'+(esc(maxB.unit)==='tokens'?'(tokens)':'');
+    }else{kr.textContent='–';document.getElementById('kpi-remain-note').textContent='接口未返回绝对值'}
     renderBlocks(j);
-  }catch(e){document.getElementById('status').textContent='网络错误'}
+  }catch(e){document.getElementById('status-t').textContent='网络错误'}
 }
 async function loadHistory(){
   try{
@@ -1424,8 +1460,8 @@ async function loadHistory(){
     const X=t=>P+(t-t0)/(t1-t0)*(W-2*P),Y=p=>H-P-(p/100)*(H-2*P);
     let g='';
     [0,25,50,75,80,100].forEach(yy=>{
-      g+=`<line x1="${P}" x2="${W-P}" y1="${Y(yy)}" y2="${Y(yy)}" stroke="${yy===80?'#7a3b3b':'#1e2c49'}" stroke-dasharray="${yy===0||yy===80?'0':'3 5'}"/>`+
-      `<text x="${yy===80?W-P+2:4}" y="${Y(yy)+3.5}"${yy===80?' fill="#f87171"':''} text-anchor="${yy===80?'start':'start'}">${yy}%</text>`;
+      g+=`<line x1="${P}" x2="${W-P}" y1="${Y(yy)}" y2="${Y(yy)}" stroke="${yy===80?'rgba(220,38,38,.35)':'var(--border)'}" stroke-dasharray="${yy===0||yy===80?'0':'3 5'}"/>`+
+      `<text x="${yy===80?W-P+2:4}" y="${Y(yy)+3.5}"${yy===80?' fill="var(--err)"':''}>${yy}%</text>`;
     });
     for(let i=0;i<=3;i++){const t=t0+(t1-t0)*i/3,d=new Date(t*1000);
       g+=`<text x="${X(t)}" y="${H-8}" text-anchor="middle">${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}</text>`}
@@ -1448,14 +1484,16 @@ async function loadHistory(){
 }
 function busy(btn,txt,done){const old=btn.textContent;btn.disabled=true;btn.textContent=txt;
 setTimeout(()=>{btn.disabled=false;btn.textContent=old;if(done)done()},done?400:1200)}
-async function saveInterval(btn){
-  const iv=parseInt(document.getElementById('interval').value,10),msg=document.getElementById('msg');
-  busy(btn,'保存中…');msg.textContent='';
+async function pickInterval(iv,btn){
+  document.querySelectorAll('.iv-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const msg=document.getElementById('msg');
   try{
     const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({interval_minutes:iv})});
     const j=await r.json();
     msg.textContent=r.ok?'✅ 已保存:'+(iv===0?'推送已关闭':'每 '+iv+' 分钟一次')+',30 秒内生效':'❌ '+(j.error||('HTTP '+r.status));
-  }catch(e){msg.textContent='❌ 保存失败'}
+    if(!r.ok)renderInterval(USAGE?USAGE.interval_minutes:60);
+  }catch(e){msg.textContent='❌ 保存失败';renderInterval(USAGE?USAGE.interval_minutes:60)}
 }
 async function pushNow(btn){
   const msg=document.getElementById('msg');busy(btn,'推送中…');msg.textContent='';
@@ -1489,29 +1527,36 @@ async function loadResetCards(){
   const stats=document.getElementById('rc-stats'),body=document.getElementById('rc-body'),mode=document.getElementById('rc-mode');
   try{
     const r=await fetch('/api/reset-cards');const j=await r.json();
-    if(!j.enabled){mode.textContent='未启用';mode.className='pill';
+    if(!j.enabled){mode.className='pill';document.getElementById('rc-mode-t').textContent='未启用';
       stats.innerHTML='';body.innerHTML='<span class="muted">config.json 中 reset_card.enabled=false</span>';return}
-    if(j.error){mode.textContent='异常';mode.className='pill bad';
-      stats.innerHTML='';body.innerHTML='<span style="color:var(--red)">⚠️ '+esc(j.error)+'</span>';return}
-    mode.textContent=j.auto_use?('自动使用 · 临期 '+j.threshold_minutes+' 分钟触发'):'仅展示(自动使用关闭)';
-    mode.className='pill '+(j.auto_use?'ok':'');
+    if(j.error){mode.className='pill err';document.getElementById('rc-mode-t').textContent='异常';
+      stats.innerHTML='';body.innerHTML='<span style="color:var(--err)">⚠️ '+esc(j.error)+'</span>';return}
+    mode.className='pill '+(j.auto_use?'on':'');
+    document.getElementById('rc-mode-t').textContent=j.auto_use?('自动使用 · 临期 '+j.threshold_minutes+' 分钟触发'):'仅展示(自动使用关闭)';
     const statCard=(list,title)=>{
       const n=list.length;
       const first=list.length?list.slice().sort((a,b)=>a.expire_at-b.expire_at)[0]:null;
       const flags=first?(first.will_auto_use?'<span class="tag-wait">⏰ 待自动使用</span>':(first.near_expiry?'<span class="tag-near">临期</span>':'')):'';
       return `<div class="rc-stat"><div class="t">${title}</div>
-      <div class="n num">${n}<small>张</small></div>
+      <div class="n">${n}<small>张</small></div>
       <div class="e">${first?('最早 <b><span class="cd" data-at="${(first.expire_at/1000).toFixed(0)}">-</span></b> 后过期'+flags):'暂无卡片'}</div></div>`;
     };
     stats.innerHTML=statCard(j.five_hour,'🔁 5 小时卡')+statCard(j.week,'📅 周卡');
+    const k5=document.getElementById('kpi-5h'),kw=document.getElementById('kpi-w');
+    k5.textContent=j.five_hour.length;k5.className='val '+(j.five_hour.length?'ok':'');
+    document.getElementById('kpi-5h-note').innerHTML=j.five_hour.length?
+      '最早 <span class="cd" data-at="'+(j.five_hour.slice().sort((a,b)=>a.expire_at-b.expire_at)[0].expire_at/1000).toFixed(0)+'">-</span> 后过期':'暂无卡片';
+    kw.textContent=j.week.length;kw.className='val '+(j.week.length?'ok':'');
+    document.getElementById('kpi-w-note').innerHTML=j.week.length?
+      '最早 <span class="cd" data-at="'+(j.week.slice().sort((a,b)=>a.expire_at-b.expire_at)[0].expire_at/1000).toFixed(0)+'">-</span> 后过期':'暂无卡片';
     const row=(list,label)=>{
       if(!list.length)return '';
       const groups={};list.forEach(c=>{const k=c.expire_at;groups[k]=groups[k]||{n:0,c};groups[k].n++});
       return Object.values(groups).map(g=>{
         const c=g.c,n=g.n>1?' ×'+g.n:'';
-        const flag=c.will_auto_use?' <span style="color:var(--amber)">⏰待自动使用</span>':(c.near_expiry?' <span style="color:var(--red)">临期</span>':'');
+        const flag=c.will_auto_use?' <span style="color:var(--warn)">⏰待自动使用</span>':(c.near_expiry?' <span style="color:var(--err)">临期</span>':'');
         return `<div class="rst"><span>${label}${n}</span>
-        <span class="tbar"><i style="width:${Math.max(3,Math.min(100,c.expire_in/86400)).toFixed(0)}%;background:${c.near_expiry?'#f87171':'#4cc2ff'}"></i></span>
+        <span class="tbar"><i style="width:${Math.max(3,Math.min(100,c.expire_in/86400)).toFixed(0)}%;background:${c.near_expiry?'var(--err)':'var(--acc)'}"></i></span>
         <span style="text-align:right"><span class="cd" data-at="${(c.expire_at/1000).toFixed(0)}">-</span> 后过期${flag}</span></div>`}).join('');
     };
     const rowsHtml=row(j.five_hour,'🔁 5 小时卡')+row(j.week,'📅 周卡');
@@ -1537,6 +1582,16 @@ async function useCard(type,btn){
   }catch(e){alert('使用失败: 网络错误')}
   btn.disabled=false;btn.textContent=old;loadResetCards();
 }
+function toggleTheme(){
+  const cur=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  applyTheme(cur);
+}
+function applyTheme(t){
+  document.documentElement.dataset.theme=t;
+  localStorage.setItem('zpu-theme',t);
+  document.getElementById('theme-btn').textContent=t==='dark'?'☀️':'🌙';
+}
+applyTheme(localStorage.getItem('zpu-theme')||'light');
 function refreshAll(){loadUsage();loadHistory();loadResetCards()}
 tickCd();setInterval(tickCd,1000);
 refreshAll();
