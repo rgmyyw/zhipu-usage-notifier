@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -13,7 +16,7 @@ from email.utils import formataddr
 from pathlib import Path
 from typing import Optional
 from urllib.request import Request, urlopen
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 if sys.stdout.encoding and sys.stdout.encoding.upper() != "UTF-8":
@@ -452,10 +455,6 @@ def build_console(data: dict, api_key: str) -> str:
 
 
 def send_dingtalk(webhook_url: str, msg: str, secret: Optional[str] = None):
-    import hashlib
-    import base64
-    import hmac
-
     if secret:
         timestamp = str(round(time.time() * 1000))
         sign_string = f"{timestamp}\n{secret}"
@@ -540,6 +539,358 @@ def notify(config: dict, data: dict, api_key: str):
             msg_html=build_email_html(data, api_key),
             use_tls=email_cfg.get("use_tls", True),
         )
+
+
+# ── ZCode 重置卡(查询 / 临期自动使用 / 触发通知) ────────────────────
+# 接口逆向自 ZCode 客户端,与其点"重置"按钮走完全相同的官方路径:
+#   GET  {base}/api/v1/coding-plan/reset/status   查询剩余卡片
+#   POST {base}/api/v1/coding-plan/reset/use      使用一张 {idempotency_key, reset_type}
+#   鉴权: Authorization: Bearer <zcodejwttoken>
+#         X-Bigmodel-Authorization: <oauth:bigmodel:access_token>
+#   token 取自 ~/.zcode/v2/credentials.json(容器内挂载/复制到 data 目录),
+#   AES-256-GCM 加密,密钥由本机信息派生(见 _credential_secret)。
+
+RESET_STATE_PATH = _DATA_DIR / "reset_cards.json"
+RESET_CARD_META = {
+    "FIVE_HOUR": {"label": "5 小时额度重置卡", "short": "5小时卡"},
+    "WEEK": {"label": "周额度重置卡", "short": "周卡"},
+}
+
+try:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    _HAS_CRYPTO = True
+except ImportError:
+    _HAS_CRYPTO = False
+
+_reset_lock = threading.Lock()
+_reset_token_cache = {"mtime": None, "tokens": None}
+
+
+def _reset_cfg() -> dict:
+    cfg = dict(load_config().get("reset_card") or {})
+    if not cfg.get("credentials_file"):
+        default = _DATA_DIR / "zcode-credentials.json"
+        if default.exists():
+            cfg["credentials_file"] = str(default)
+    return cfg
+
+
+def _credential_secret(cfg: dict) -> str:
+    """与 ZCode 客户端一致的密钥派生:ZCODE_CREDENTIAL_SECRET 或本机信息 fallback"""
+    env = os.environ.get("ZCODE_CREDENTIAL_SECRET")
+    if env:
+        return env
+    if cfg.get("credential_secret"):
+        return cfg["credential_secret"]
+    plat = cfg.get("credential_platform") or "darwin"
+    home = cfg.get("credential_home") or ""
+    user = cfg.get("credential_user") or ""
+    return f"zcode-credential-fallback:{plat}:{home}:{user}"
+
+
+def _zcode_decrypt(value: str, secret: str) -> str:
+    """解密 credentials.json 中 enc:v1: 前缀的值(iv.tag.ciphertext 均 base64url)"""
+    if not value.startswith("enc:v1:"):
+        return value
+    if not _HAS_CRYPTO:
+        raise RuntimeError("缺少 cryptography 库:pip install cryptography")
+    key = hashlib.sha256(secret.encode("utf-8")).digest()
+    iv_b64, tag_b64, ct_b64 = value[len("enc:v1:"):].split(".")
+
+    def _b64u(s: str) -> bytes:
+        return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+    iv, tag, ct = _b64u(iv_b64), _b64u(tag_b64), _b64u(ct_b64)
+    return AESGCM(key).decrypt(iv, ct + tag, None).decode("utf-8")
+
+
+def _load_zcode_tokens() -> Optional[tuple[str, str]]:
+    """返回 (zcode_token, bigmodel_token);直配 token 优先,否则解密 credentials 文件"""
+    cfg = _reset_cfg()
+    if cfg.get("zcode_token") and cfg.get("bigmodel_token"):
+        return cfg["zcode_token"].strip(), cfg["bigmodel_token"].strip()
+
+    cred_file = cfg.get("credentials_file")
+    if not cred_file or not os.path.exists(cred_file):
+        return None
+    mtime = os.path.getmtime(cred_file)
+    if _reset_token_cache["tokens"] and _reset_token_cache["mtime"] == mtime:
+        return _reset_token_cache["tokens"]
+    with open(cred_file, "r", encoding="utf-8") as f:
+        creds = json.load(f)
+    secret = _credential_secret(cfg)
+    zcode = _zcode_decrypt(creds.get("zcodejwttoken", ""), secret).strip()
+    bigmodel = _zcode_decrypt(creds.get("oauth:bigmodel:access_token", ""), secret).strip()
+    tokens = (zcode, bigmodel) if zcode and bigmodel else None
+    if not tokens:
+        raise RuntimeError("token 解密失败:secret 不匹配或字段缺失")
+    _reset_token_cache.update(mtime=mtime, tokens=tokens)
+    return tokens
+
+
+def _reset_headers(tokens: tuple[str, str]) -> dict:
+    zcode, bigmodel = tokens
+    auth = zcode if zcode.lower().startswith("bearer ") else f"Bearer {zcode}"
+    return {
+        "Authorization": auth,
+        "X-Bigmodel-Authorization": bigmodel,
+        "Bigmodel-Target-Type": "PERSONAL",
+        "User-Agent": "ZhipuUsageNotifier/1.0",
+    }
+
+
+def _reset_api(path: str, method: str = "GET", payload: Optional[dict] = None) -> dict:
+    """调用重置卡接口,返回 {ok, status, data, error}"""
+    tokens = _load_zcode_tokens()
+    if tokens is None:
+        return {"ok": False, "error": "未配置 token(缺少 reset_card.zcode_token 或 credentials_file)"}
+    base = (_reset_cfg().get("base_url") or "https://zcode.z.ai").rstrip("/")
+    headers = _reset_headers(tokens)
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = Request(base + path, data=data, headers=headers, method=method)
+    try:
+        with urlopen(req, timeout=15) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", "replace")[:200]
+        except Exception:
+            detail = ""
+        if e.code == 401:
+            return {"ok": False, "error": "token 已失效(401),请更新 credentials 文件或 token 配置"}
+        return {"ok": False, "error": f"HTTP {e.code} {detail}"}
+    except URLError as e:
+        return {"ok": False, "error": f"请求失败: {e}"}
+    if isinstance(body, dict) and body.get("code") not in (None, 0, 200):
+        return {"ok": False, "error": f"API {body.get('code')}: {body.get('msg', '未知错误')}"}
+    return {"ok": True, "status": 200, "data": (body.get("data") if isinstance(body, dict) else body) or {}, "raw": body if isinstance(body, dict) else {}}
+
+
+def fetch_reset_cards() -> dict:
+    """查询剩余重置卡;返回 {five_hour: [expire_ms...], week: [...], history: {...}, error}"""
+    r = _reset_api("/api/v1/coding-plan/reset/status")
+    if not r["ok"]:
+        return {"five_hour": [], "week": [], "history": {}, "error": r["error"]}
+    d = r["data"]
+    return {
+        "five_hour": sorted(x.get("expire_at", 0) for x in d.get("available_five_hour_resets", [])),
+        "week": sorted(x.get("expire_at", 0) for x in d.get("available_week_resets", [])),
+        "history": {
+            "five_hour_used_at": (d.get("latest_five_hour_reset_history") or {}).get("used_at"),
+            "week_used_at": (d.get("latest_week_reset_history") or {}).get("used_at"),
+        },
+        "error": None,
+    }
+
+
+def _load_reset_state() -> dict:
+    try:
+        raw = json.loads(RESET_STATE_PATH.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            return raw
+    except Exception:
+        pass
+    return {"batches": {}, "events": []}
+
+
+def _save_reset_state(state: dict):
+    RESET_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = RESET_STATE_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(RESET_STATE_PATH)
+
+
+def _record_event(state: dict, card_type: str, source: str, expire_at: int, ok: bool, detail: str = ""):
+    ev = {
+        "ts": int(time.time()),
+        "type": card_type,
+        "source": source,
+        "expire_at": expire_at,
+        "result": "used" if ok else "failed",
+    }
+    if detail:
+        ev["detail"] = detail[:200]
+    state.setdefault("events", []).insert(0, ev)
+    state["events"] = state["events"][:50]
+
+
+def decide_auto_uses(cards: dict, threshold_ms: int, batches: dict, now_ms: int) -> list[tuple[str, int]]:
+    """纯决策:返回待自动使用的 [(type, expire_at)]。
+    规则:每类只看最早过期的一张,距过期 <= 阈值且该批次未用过(同批次连用多张无收益)。"""
+    plan = []
+    for card_type, key in (("FIVE_HOUR", "five_hour"), ("WEEK", "week")):
+        expires = [e for e in cards.get(key, []) if e]
+        if not expires:
+            continue
+        earliest = expires[0]
+        if now_ms < earliest - threshold_ms:
+            continue
+        if batches.get(card_type) == earliest:
+            continue
+        plan.append((card_type, earliest))
+    return plan
+
+
+def use_reset_card(card_type: str, source: str, expire_at: Optional[int] = None) -> dict:
+    """使用一张重置卡。auto 来源用稳定幂等键(重试/多实例不重复消耗),manual 每次独立。"""
+    if card_type not in RESET_CARD_META:
+        return {"ok": False, "error": f"未知卡片类型 {card_type}"}
+    if source == "auto":
+        idem = f"auto:{card_type}:{expire_at}"
+    else:
+        idem = f"manual:{card_type}:{int(time.time() * 1000)}"
+    r = _reset_api("/api/v1/coding-plan/reset/use", method="POST",
+                   payload={"idempotency_key": idem, "reset_type": card_type})
+    ok = r["ok"] and (r["data"].get("used") is True or r.get("raw", {}).get("used") is True)
+
+    with _reset_lock:
+        state = _load_reset_state()
+        _record_event(state, card_type, source, expire_at or 0, ok, r.get("error", ""))
+        if ok and source == "auto" and expire_at:
+            state.setdefault("batches", {})[card_type] = expire_at
+        _save_reset_state(state)
+
+    if ok and _reset_cfg().get("notify_on_use", True):
+        threading.Thread(target=_notify_card_used, args=(card_type, source, expire_at), daemon=True).start()
+    log.info("Reset card use [%s/%s]: %s", card_type, source, "ok" if ok else r.get("error"))
+    return {"ok": ok, "error": r.get("error", "")}
+
+
+def _notify_card_used(card_type: str, source: str, expire_at: Optional[int]):
+    """触发使用后推送钉钉 + 邮件(复用现有通知渠道)"""
+    config = load_config()
+    meta = RESET_CARD_META[card_type]
+    tz8 = timezone(timedelta(hours=8))
+    try:
+        cards = fetch_reset_cards()
+    except Exception:
+        cards = {"five_hour": [], "week": [], "error": None}
+
+    def _cards_line(key: str, t: str) -> str:
+        n = len(cards.get(key, []))
+        first = cards[key][0] if n else None
+        when = datetime.fromtimestamp(first / 1000, tz=tz8).strftime("%m/%d %H:%M") if first else "-"
+        return f"- {RESET_CARD_META[t]['label']} ×{n}（最早 {when} 过期）"
+
+    trigger = "临期自动使用" if source == "auto" else "手动使用"
+    old_exp = datetime.fromtimestamp(expire_at / 1000, tz=tz8).strftime("%m/%d %H:%M") if expire_at else "-"
+
+    md = [
+        f"# 🎴 ZCode 重置卡已{ '自动' if source == 'auto' else '被手动' }使用",
+        "",
+        f"> **类型** {meta['label']}　**触发** {trigger}",
+        f"> **卡片原过期** {old_exp}",
+        "",
+        "---",
+        "",
+        "**剩余卡片**",
+        "",
+        _cards_line("five_hour", "FIVE_HOUR"),
+        _cards_line("week", "WEEK"),
+        "",
+        f"\n*{datetime.now(tz8).strftime('%Y-%m-%d %H:%M:%S')} · zhipu-usage-notifier*",
+    ]
+
+    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:20px;background:#f3f4f6;font-family:-apple-system,'Segoe UI','PingFang SC',sans-serif">
+<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.08)">
+<div style="padding:20px 24px;background:linear-gradient(135deg,#059669,#10b981);color:#fff">
+<h2 style="margin:0;font-size:17px">🎴 重置卡已{'自动' if source == 'auto' else '被手动'}使用</h2>
+<p style="margin:6px 0 0;opacity:.85;font-size:13px">{meta['label']} · {trigger} · 原过期 {old_exp}</p>
+</div>
+<div style="padding:16px 24px;font-size:14px;color:#374151">
+<b>剩余卡片</b>
+<p style="margin:6px 0">{_cards_line('five_hour', 'FIVE_HOUR')}<br>{_cards_line('week', 'WEEK')}</p>
+</div>
+<div style="padding:10px 24px;background:#f9fafb;font-size:11px;color:#9ca3af;text-align:center">zhipu-usage-notifier</div>
+</div></body></html>"""
+
+    dingtalk_cfg = config.get("dingtalk")
+    if dingtalk_cfg and dingtalk_cfg.get("webhook_url"):
+        send_dingtalk(dingtalk_cfg["webhook_url"], "\n".join(md), dingtalk_cfg.get("secret"))
+    email_cfg = config.get("email")
+    if email_cfg and email_cfg.get("smtp_host") and email_cfg.get("to"):
+        try:
+            send_email(
+                smtp_host=email_cfg["smtp_host"],
+                smtp_port=email_cfg.get("smtp_port", 587),
+                smtp_user=email_cfg["smtp_user"],
+                smtp_pass=email_cfg["smtp_pass"],
+                from_addr=email_cfg.get("from", email_cfg["smtp_user"]),
+                to_addrs=email_cfg["to"] if isinstance(email_cfg["to"], list) else [email_cfg["to"]],
+                msg_html=html,
+                use_tls=email_cfg.get("use_tls", True),
+            )
+        except Exception as e:
+            log.error("Card-used email failed: %s", e)
+
+
+def reset_cards_payload() -> dict:
+    """仪表盘 /api/reset-cards 数据"""
+    cfg = _reset_cfg()
+    try:
+        cards = fetch_reset_cards()
+    except Exception as e:
+        cards = {"five_hour": [], "week": [], "history": {}, "error": str(e)}
+    with _reset_lock:
+        state = _load_reset_state()
+    now_ms = int(time.time() * 1000)
+    threshold_ms = int(cfg.get("threshold_minutes", 20)) * 60 * 1000
+
+    def _norm(expires: list, card_type: str) -> list:
+        out = []
+        for e in expires:
+            if not e:
+                continue
+            out.append({
+                "expire_at": e,
+                "expire_in": max(0, int((e - now_ms) / 1000)),
+                "near_expiry": (e - now_ms) <= threshold_ms,
+                "will_auto_use": (
+                    cfg.get("enabled") and cfg.get("auto_use", True)
+                    and (e - now_ms) <= threshold_ms
+                    and state.get("batches", {}).get(card_type) != e
+                ),
+            })
+        return out
+
+    return {
+        "enabled": bool(cfg.get("enabled")),
+        "auto_use": bool(cfg.get("enabled") and cfg.get("auto_use", True)),
+        "notify_on_use": bool(cfg.get("notify_on_use", True)),
+        "threshold_minutes": cfg.get("threshold_minutes", 20),
+        "configured": bool(cfg.get("zcode_token") or cfg.get("credentials_file") or (_DATA_DIR / "zcode-credentials.json").exists()),
+        "five_hour": _norm(cards.get("five_hour", []), "FIVE_HOUR"),
+        "week": _norm(cards.get("week", []), "WEEK"),
+        "history": cards.get("history", {}),
+        "events": state.get("events", [])[:20],
+        "error": cards.get("error"),
+        "updated_at": datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def auto_use_loop():
+    """每 check_interval 秒检查一次,临期卡片自动使用(幂等,失败下轮重试)"""
+    while True:
+        cfg = _reset_cfg()
+        interval = max(60, int(cfg.get("check_interval_seconds", 300)))
+        try:
+            if cfg.get("enabled") and cfg.get("auto_use", True):
+                threshold_ms = int(cfg.get("threshold_minutes", 20)) * 60 * 1000
+                cards = fetch_reset_cards()
+                if cards.get("error"):
+                    log.warning("Reset card status error: %s", cards["error"])
+                else:
+                    with _reset_lock:
+                        batches = dict(_load_reset_state().get("batches", {}))
+                    for card_type, earliest in decide_auto_uses(cards, threshold_ms, batches, int(time.time() * 1000)):
+                        use_reset_card(card_type, "auto", earliest)
+        except Exception as e:
+            log.error("Reset card auto-use loop error: %s", e)
+        time.sleep(interval)
 
 
 def main():
@@ -841,6 +1192,16 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
   <div class="muted">推送窗口 08:00–23:00,按所选频率对齐;调整后 30 秒内生效 · 数据直连智谱官方接口(本地无累计,数值为准接口侧口径)</div>
 </div>
 
+<div class="card" style="margin-bottom:12px">
+  <h2>🎴 ZCode 重置卡 <span class="pill" id="rc-mode">加载中…</span>
+    <span style="flex:1"></span>
+    <button class="ghost" onclick="useCard('FIVE_HOUR',this)">使用一张5小时卡</button>
+    <button class="ghost" onclick="useCard('WEEK',this)">使用一张周卡</button>
+  </h2>
+  <div id="rc-body" class="muted">加载中…</div>
+  <div class="sub" id="rc-events"></div>
+</div>
+
 <div class="grid" id="blocks"></div>
 
 <div class="card" style="margin-top:12px">
@@ -854,7 +1215,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
   <div class="legend" id="legend"></div>
 </div>
 
-<footer>zhipu-usage dashboard · <a style="color:var(--muted)" href="/api/usage">/api/usage</a> · 历史 /api/history</footer>
+<footer>zhipu-usage dashboard · <a style="color:var(--muted)" href="/api/usage">/api/usage</a> · 历史 /api/history · 重置卡 /api/reset-cards</footer>
 </div>
 
 <script>
@@ -998,9 +1359,48 @@ async function copyReport(btn){
 function tickCd(){const now=Date.now()/1000;
 document.querySelectorAll('.cd').forEach(el=>{const at=parseFloat(el.dataset.at);
 el.textContent=at>0?dur(at-now):(at===0?'无':'-')})}
+async function loadResetCards(){
+  const body=document.getElementById('rc-body'),mode=document.getElementById('rc-mode');
+  try{
+    const r=await fetch('/api/reset-cards');const j=await r.json();
+    if(!j.enabled){mode.textContent='未启用';body.innerHTML='<span class="muted">config.json 中 reset_card.enabled=false</span>';return}
+    if(j.error){mode.textContent='异常';body.innerHTML='<span style="color:#fca5a5">⚠️ '+esc(j.error)+'</span>';}
+    else{
+      mode.textContent=j.auto_use?('自动使用已开启 · 临期'+j.threshold_minutes+'分钟触发'):'仅展示(自动使用关闭)';
+      const row=(list,label)=>{
+        if(!list.length)return `<div class="rst"><span>${label}</span><span></span><span class="muted" style="text-align:right">无卡片</span></div>`;
+        const groups={};list.forEach(c=>{const k=c.expire_at;groups[k]=groups[k]||{n:0,c};groups[k].n++});
+        return Object.values(groups).map(g=>{
+          const c=g.c,n=g.n>1?' ×'+g.n:'';
+          const flag=c.will_auto_use?' <span style="color:#fbbf24">⏰待自动使用</span>':(c.near_expiry?' <span style="color:#fca5a5">临期</span>':'');
+          return `<div class="rst"><span>${label}${n}</span>
+          <span class="tbar" style="margin:0"><i style="width:${Math.max(3,Math.min(100,c.expire_in/86400)).toFixed(0)}%;background:${c.near_expiry?'#ef4444':'#38bdf8'}"></i></span>
+          <span style="text-align:right"><span class="cd" data-at="${(c.expire_at/1000).toFixed(0)}">-</span> 后过期${flag}</span></div>`}).join('');
+      };
+      body.innerHTML=row(j.five_hour,'🔁 5 小时卡')+row(j.week,'📅 周卡')
+        +'<div class="muted" style="margin-top:4px">距过期不足 '+j.threshold_minutes+' 分钟时自动使用一张(同批次仅一张)'+(j.notify_on_use?' · 触发后推送钉钉/邮箱':' · 触发不发通知')+'</div>';
+    }
+    const ev=document.getElementById('rc-events');
+    ev.innerHTML=(j.events&&j.events.length)?'<b>最近触发</b>'+j.events.slice(0,8).map(e=>{
+      const t=new Date(e.ts*1000).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const nm=e.type==='WEEK'?'周卡':'5小时卡';
+      return `<div class="kv"><span>${t} · ${e.source==='auto'?'自动':'手动'}使用${nm}${e.result==='failed'?' ❌ '+esc(e.detail||'失败'):' ✅'}</span><span></span></div>`}).join(''):'';
+  }catch(e){body.textContent='网络错误'}
+}
+async function useCard(type,btn){
+  const nm=type==='WEEK'?'周额度重置卡':'5 小时额度重置卡';
+  if(!confirm('确定立即使用一张'+nm+'吗?\n(额度会被重置为满,卡片消耗后不可恢复)'))return;
+  const old=btn.textContent;btn.disabled=true;btn.textContent='使用中…';
+  try{
+    const r=await fetch('/api/reset-cards/use',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type})});
+    const j=await r.json();
+    if(!r.ok||!j.ok)alert('使用失败: '+(j.error||('HTTP '+r.status)));
+  }catch(e){alert('使用失败: 网络错误')}
+  btn.disabled=false;btn.textContent=old;loadResetCards();
+}
 tickCd();setInterval(tickCd,1000);
-loadUsage();loadHistory();
-setInterval(loadUsage,60000);setInterval(loadHistory,300000);
+loadUsage();loadHistory();loadResetCards();
+setInterval(loadUsage,60000);setInterval(loadHistory,300000);setInterval(loadResetCards,60000);
 </script>
 </body>
 </html>"""
@@ -1036,6 +1436,8 @@ class _Handler(BaseHTTPRequestHandler):
         elif path == "/api/report":
             payload = report_payload()
             self._json(payload, 200) if payload else self._json({"error": "生成失败"}, 502)
+        elif path == "/api/reset-cards":
+            self._json(reset_cards_payload())
         elif path == "/healthz":
             self._send(200, b"ok", "text/plain; charset=utf-8")
         else:
@@ -1061,6 +1463,10 @@ class _Handler(BaseHTTPRequestHandler):
         elif path == "/api/push":
             threading.Thread(target=_push_once, daemon=True).start()
             self._json({"ok": True, "message": "已触发推送"})
+        elif path == "/api/reset-cards/use":
+            card_type = str(body.get("type") or "")
+            result = use_reset_card(card_type, "manual")
+            self._json(result, 200 if result["ok"] else 502)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -1078,6 +1484,10 @@ def start_dashboard():
 def run_loop():
     start_dashboard()
     threading.Thread(target=sampler_loop, daemon=True, name="sampler").start()
+    if (_reset_cfg().get("enabled")):
+        threading.Thread(target=auto_use_loop, daemon=True, name="reset-cards").start()
+        log.info("Reset-card worker started (auto_use=%s, threshold %smin)",
+                 bool(_reset_cfg().get("auto_use", True)), _reset_cfg().get("threshold_minutes", 20))
     interval = load_settings()["interval_minutes"]
     target = next_push_time(interval)
     log.info("Starting ZhipuAI usage notifier (push window %02d:00-%02d:00)", WINDOW_START_HOUR, WINDOW_END_HOUR)

@@ -17,5 +17,25 @@
     "from": "your_email@qq.com",
     "to": ["receiver@example.com"],
     "use_tls": true
+  },
+
+  "_comment_reset_card": "====== ZCode 重置卡(临期自动使用 + 触发通知) ======",
+  "reset_card": {
+    "enabled": true,
+    "auto_use": true,
+    "threshold_minutes": 20,
+    "check_interval_seconds": 300,
+    "notify_on_use": true,
+    "base_url": "https://zcode.z.ai",
+
+    "_comment_token": "凭据二选一:优先直配 token;否则解密 credentials 文件(把 ~/.zcode/v2/credentials.json 复制到 ./zcode-credentials.json)",
+    "zcode_token": "",
+    "bigmodel_token": "",
+    "credentials_file": "",
+
+    "_comment_secret": "解密密钥派生所需的三个本机信息(即运行 ZCode 的那台 Mac:平台/家目录/用户名)",
+    "credential_platform": "darwin",
+    "credential_home": "/Users/yourname",
+    "credential_user": "yourname"
   }
 }

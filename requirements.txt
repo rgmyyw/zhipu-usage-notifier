@@ -1,2 +1,2 @@
-# No external dependencies required (uses stdlib only)
-# For DingTalk signature support (hmac, hashlib, base64), all stdlib
+# 重置卡 token 解密需要(容器内 pip 安装,宿主机直接运行也需安装)
+cryptography>=42.0

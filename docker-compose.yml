@@ -14,3 +14,6 @@ services:
     volumes:
       - ./config.json:/app/config.json:ro
       - ./data:/app/data
+      # ZCode 重置卡凭据:从本机 ~/.zcode/v2/credentials.json 复制/rsync 到 ./zcode-credentials.json
+      # (token 为长期会话 JWT,仅在 ZCode 重新登录后轮换,重新登录后需再同步一次)
+      - ./zcode-credentials.json:/app/data/zcode-credentials.json:ro
