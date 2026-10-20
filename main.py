@@ -1242,10 +1242,18 @@ box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px;transition:b
 color:var(--warn);background:var(--warn-dim)}
 .tag-near{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;
 color:var(--err);background:var(--err-dim)}
-.rst{display:grid;grid-template-columns:minmax(90px,140px) 1fr 150px;gap:10px;align-items:center;margin:7px 0;font-size:12.5px}
 .tbar{height:5px;border-radius:3px;background:var(--bar-track);overflow:hidden}
 .tbar>i{display:block;height:100%;border-radius:3px;background:var(--acc)}
-.rst .cd{font-weight:600;color:var(--text)}
+.rc-lists{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rc-sec{background:var(--bg-soft);border-radius:10px;padding:10px 12px}
+.rc-sec .h{font-size:12px;color:var(--muted);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center}
+.rc-item{display:grid;grid-template-columns:26px 92px 1fr auto;gap:8px;align-items:center;font-size:12.5px;
+padding:5px 0;border-top:1px dashed var(--border)}
+.rc-item:first-of-type{border-top:0}
+.rc-idx{color:var(--faint)}
+.rc-when{font-weight:600;font-variant-numeric:tabular-nums}
+.rc-left{white-space:nowrap;text-align:right}
+.rc-left .cd{font-weight:600;color:var(--text)}
 details.ev summary{cursor:pointer;font-size:12.5px;color:var(--muted);user-select:none}
 details.ev summary:hover{color:var(--text)}
 
@@ -1270,8 +1278,11 @@ footer{text-align:center;color:var(--faint);font-size:11.5px;margin-top:22px}
 .kpis{grid-template-columns:repeat(2,1fr)}
 .accgrid{grid-template-columns:1fr}
 .rc-grid{grid-template-columns:1fr 1fr}
-.rst{grid-template-columns:1fr 110px}
-.rst>span:nth-child(2){display:none}
+.rc-lists{grid-template-columns:1fr}
+.rc-item{grid-template-columns:26px 92px 1fr;grid-template-areas:"idx when left" "bar bar bar"}
+.rc-idx{grid-area:idx}.rc-when{grid-area:when}
+.rc-left{grid-area:left;justify-self:end}
+.rc-item .tbar{grid-area:bar}
 }
 </style>
 </head>
@@ -1550,18 +1561,21 @@ async function loadResetCards(){
     document.getElementById('kpi-w-note').innerHTML=j.week.length?
       '最早 <span class="cd" data-at="'+(j.week.slice().sort((a,b)=>a.expire_at-b.expire_at)[0].expire_at/1000).toFixed(0)+'">-</span> 后过期':'暂无卡片';
     const row=(list,label)=>{
-      if(!list.length)return '';
-      const groups={};list.forEach(c=>{const k=c.expire_at;groups[k]=groups[k]||{n:0,c};groups[k].n++});
-      return Object.values(groups).map(g=>{
-        const c=g.c,n=g.n>1?' ×'+g.n:'';
-        const flag=c.will_auto_use?' <span style="color:var(--warn)">⏰待自动使用</span>':(c.near_expiry?' <span style="color:var(--err)">临期</span>':'');
-        return `<div class="rst"><span>${label}${n}</span>
+      const sorted=list.slice().sort((a,b)=>a.expire_at-b.expire_at);
+      const head=`<div class="h"><span>${label}</span><span class="num">${sorted.length} 张</span></div>`;
+      if(!sorted.length)return `<div class="rc-sec">${head}<div class="muted" style="padding:6px 0">暂无卡片</div></div>`;
+      const rows=sorted.map((c,idx)=>{
+        const when=new Date(c.expire_at).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+        const flag=c.will_auto_use?'<span class="tag-wait">⏰ 待自动</span>':(c.near_expiry?'<span class="tag-near">临期</span>':'');
+        return `<div class="rc-item"><span class="rc-idx num">#${idx+1}</span>
+        <span class="rc-when">${when}</span>
         <span class="tbar"><i style="width:${Math.max(3,Math.min(100,c.expire_in/86400)).toFixed(0)}%;background:${c.near_expiry?'var(--err)':'var(--acc)'}"></i></span>
-        <span style="text-align:right"><span class="cd" data-at="${(c.expire_at/1000).toFixed(0)}">-</span> 后过期${flag}</span></div>`}).join('');
+        <span class="rc-left"><span class="cd" data-at="${(c.expire_at/1000).toFixed(0)}">-</span> 后过期${flag}</span></div>`;
+      }).join('');
+      return `<div class="rc-sec">${head}${rows}</div>`;
     };
-    const rowsHtml=row(j.five_hour,'🔁 5 小时卡')+row(j.week,'📅 周卡');
-    body.innerHTML=rowsHtml+((j.five_hour.length+j.week.length)?
-      `<div class="muted" style="margin-top:4px">距过期不足 ${j.threshold_minutes} 分钟时自动使用一张(同批次仅一张)${j.notify_on_use?' · 触发后推送钉钉/邮箱':''}</div>`:'');
+    body.innerHTML='<div class="rc-lists">'+row(j.five_hour,'🔁 5 小时卡')+row(j.week,'📅 周卡')+'</div>'+((j.five_hour.length+j.week.length)?
+      `<div class="muted" style="margin-top:6px">距过期不足 ${j.threshold_minutes} 分钟时自动使用一张(同批次仅一张)${j.notify_on_use?' · 触发后推送钉钉/邮箱':''}</div>`:'');
     const wrap=document.getElementById('rc-events-wrap');
     const evs=(j.events||[]);
     wrap.style.display=evs.length?'':'none';
