@@ -8,6 +8,7 @@ import smtplib
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime, timezone, timedelta
 from email.header import Header
 from email.mime.text import MIMEText
@@ -734,14 +735,27 @@ def decide_auto_uses(cards: dict, threshold_ms: int, batches: dict, now_ms: int)
     return plan
 
 
+def _det_uuid(tag: str) -> str:
+    """从批次信息确定性派生标准 v4 UUID 作为幂等键。
+
+    服务端只接受 UUID 格式(官方客户端用 crypto.randomUUID(),实测含冒号等字符会 400);
+    确定性派生保证重试/多实例并行时键一致,服务端幂等去重、不重复消耗同一张卡。
+    注意:须与 ~/.zcode/scripts/auto-reset-card.mjs 的 detUuid 保持一致。"""
+    digest = hashlib.sha256(f"auto|{tag}".encode("utf-8")).digest()
+    b = bytearray(digest[:16])
+    b[6] = (b[6] & 0x0F) | 0x40  # version 4
+    b[8] = (b[8] & 0x3F) | 0x80  # variant 10xx
+    return str(uuid.UUID(bytes=bytes(b)))
+
+
 def use_reset_card(card_type: str, source: str, expire_at: Optional[int] = None) -> dict:
-    """使用一张重置卡。auto 来源用稳定幂等键(重试/多实例不重复消耗),manual 每次独立。"""
+    """使用一张重置卡。auto 来源用确定性 UUID 幂等键(重试/多实例不重复消耗),manual 每次独立。"""
     if card_type not in RESET_CARD_META:
         return {"ok": False, "error": f"未知卡片类型 {card_type}"}
     if source == "auto":
-        idem = f"auto:{card_type}:{expire_at}"
+        idem = _det_uuid(f"{card_type}:{expire_at}")
     else:
-        idem = f"manual:{card_type}:{int(time.time() * 1000)}"
+        idem = str(uuid.uuid4())
     r = _reset_api("/api/v1/coding-plan/reset/use", method="POST",
                    payload={"idempotency_key": idem, "reset_type": card_type})
     ok = r["ok"] and (r["data"].get("used") is True or r.get("raw", {}).get("used") is True)
