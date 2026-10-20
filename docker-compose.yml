@@ -7,7 +7,10 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
-      - INTERVAL_HOURS=1
       - CONFIG_PATH=/app/config.json
+      - DASHBOARD_PORT=8060
+    ports:
+      - "8060:8060"
     volumes:
       - ./config.json:/app/config.json:ro
+      - ./data:/app/data

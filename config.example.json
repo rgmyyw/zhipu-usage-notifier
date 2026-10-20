@@ -1,5 +1,5 @@
 {
-  "_comment": "===== 配置模板 - 复制为 config.json 并填入真实值 =====",
+  "_comment": "====== 配置说明 - 请复制为 config.json 并填写实际值 ======",
 
   "api_key": "your_zhipu_api_key_here",
   "endpoint": "intl",
